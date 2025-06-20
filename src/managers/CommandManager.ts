@@ -22,6 +22,7 @@ export class CommandManager {
             vscode.commands.registerCommand('solidrules.searchRules', () => this.searchRules()),
             vscode.commands.registerCommand('solidrules.activateRule', (ruleId: string) => this.activateRule(ruleId)),
             vscode.commands.registerCommand('solidrules.deactivateRule', (ruleId: string) => this.deactivateRule(ruleId)),
+            vscode.commands.registerCommand('solidrules.toggleRule', (ruleId: string) => this.toggleRule(ruleId)),
             vscode.commands.registerCommand('solidrules.deleteRule', (ruleId: string) => this.deleteRule(ruleId)),
             vscode.commands.registerCommand('solidrules.previewRule', (ruleId: string) => this.previewRule(ruleId)),
             vscode.commands.registerCommand('solidrules.addToFavorites', (ruleId: string) => this.addToFavorites(ruleId)),
@@ -164,6 +165,25 @@ export class CommandManager {
             }
         } catch (error) {
             console.error('Failed to deactivate rule:', error);
+        }
+    }
+
+    private async toggleRule(ruleId: string): Promise<void> {
+        try {
+            const rule = await this.rulesManager.getRuleById(ruleId);
+            if (!rule) {
+                console.error('Rule not found:', ruleId);
+                return;
+            }
+
+            // Toggle without notifications for smoother UX
+            if (rule.isActive) {
+                await this.rulesManager.deactivateRule(ruleId, false);
+            } else {
+                await this.rulesManager.activateRule(ruleId, false);
+            }
+        } catch (error) {
+            console.error('Failed to toggle rule:', error);
         }
     }
 

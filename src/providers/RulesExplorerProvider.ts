@@ -10,14 +10,28 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     private currentFilters: SearchFilters = { sortBy: 'recent' };
 
     constructor(private rulesManager: RulesManager) {
-        // Listen to rules changes
+        // Listen to rules changes with debouncing to avoid excessive refreshes
         this.rulesManager.onDidChangeRules(() => {
-            this.refresh();
+            this.refreshDebounced();
         });
     }
 
+    private refreshTimeout: NodeJS.Timeout | undefined;
+
     refresh(): void {
         this._onDidChangeTreeData.fire();
+    }
+
+    private refreshDebounced(): void {
+        // Debounce refreshes to avoid rapid consecutive updates
+        if (this.refreshTimeout) {
+            clearTimeout(this.refreshTimeout);
+        }
+        
+        this.refreshTimeout = setTimeout(() => {
+            this._onDidChangeTreeData.fire();
+            this.refreshTimeout = undefined;
+        }, 100); // 100ms debounce
     }
 
     getTreeItem(element: RuleTreeItem): vscode.TreeItem {
@@ -144,12 +158,17 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     treeItem.iconPath = new vscode.ThemeIcon('file-text');
                 }
 
-                // Add command for double-click
+                // Add command for single click - toggle rule activation
                 treeItem.command = {
-                    command: 'solidrules.previewRule',
-                    title: 'Preview Rule',
+                    command: 'solidrules.toggleRule',
+                    title: 'Toggle Rule',
                     arguments: [rule.id]
                 };
+
+                // Add visual styling for active rules
+                if (rule.isActive) {
+                    treeItem.resourceUri = vscode.Uri.parse(`rule-active:${rule.id}`);
+                }
 
                 return treeItem;
             });

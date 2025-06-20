@@ -375,7 +375,7 @@ export class RulesManager {
         return categories.sort();
     }
 
-    async activateRule(ruleId: string): Promise<void> {
+    async activateRule(ruleId: string, showNotification: boolean = true): Promise<void> {
         try {
             const rule = await this.databaseManager.getRuleById(ruleId);
             if (!rule) {
@@ -386,17 +386,23 @@ export class RulesManager {
             rule.isActive = true;
 
             await this.updateWorkspaceRules();
-            await this.notificationManager.showRuleActivatedNotification(rule.name);
             
+            if (showNotification) {
+                await this.notificationManager.showRuleActivatedNotification(rule.name);
+            }
+            
+            // Use a more targeted refresh instead of full reload
             this._onDidChangeRules.fire();
         } catch (error) {
             console.error(`Failed to activate rule ${ruleId}:`, error);
-            await this.notificationManager.showErrorMessage(`Failed to activate rule: ${error}`);
+            if (showNotification) {
+                await this.notificationManager.showErrorMessage(`Failed to activate rule: ${error}`);
+            }
             throw error;
         }
     }
 
-    async deactivateRule(ruleId: string): Promise<void> {
+    async deactivateRule(ruleId: string, showNotification: boolean = true): Promise<void> {
         try {
             const rule = await this.databaseManager.getRuleById(ruleId);
             if (!rule) {
@@ -414,12 +420,18 @@ export class RulesManager {
             await this.workspaceManager.removeRuleFromWorkspace(rule, rulesDirectory);
 
             await this.updateWorkspaceRules();
-            await this.notificationManager.showRuleDeactivatedNotification(rule.name);
             
+            if (showNotification) {
+                await this.notificationManager.showRuleDeactivatedNotification(rule.name);
+            }
+            
+            // Use a more targeted refresh instead of full reload
             this._onDidChangeRules.fire();
         } catch (error) {
             console.error(`Failed to deactivate rule ${ruleId}:`, error);
-            await this.notificationManager.showErrorMessage(`Failed to deactivate rule: ${error}`);
+            if (showNotification) {
+                await this.notificationManager.showErrorMessage(`Failed to deactivate rule: ${error}`);
+            }
             throw error;
         }
     }
