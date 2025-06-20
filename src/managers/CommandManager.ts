@@ -36,6 +36,7 @@ export class CommandManager {
             vscode.commands.registerCommand('solidrules.sortRules', () => this.sortRules()),
             vscode.commands.registerCommand('solidrules.configureGitHubToken', () => this.configureGitHubToken()),
             vscode.commands.registerCommand('solidrules.resetGitHubToken', () => this.resetGitHubToken()),
+            vscode.commands.registerCommand('solidrules.clearDatabase', () => this.clearDatabase()),
             vscode.commands.registerCommand('solidrules.skipTokenSetup', () => this.skipTokenSetup())
         );
 
@@ -471,6 +472,60 @@ export class CommandManager {
         } catch (error) {
             console.error('Failed to reset GitHub token:', error);
             vscode.window.showErrorMessage('Erreur lors de la suppression du token GitHub');
+        }
+    }
+
+    private async clearDatabase(): Promise<void> {
+        try {
+            const confirm = await vscode.window.showWarningMessage(
+                '⚠️ ATTENTION : Cette action supprimera TOUTES les données de SolidRules !\n\n' +
+                'Cela inclut :\n' +
+                '• Toutes les règles téléchargées\n' +
+                '• Vos favoris\n' +
+                '• Les configurations de workspace\n' +
+                '• L\'historique des mises à jour\n\n' +
+                'Cette action est IRRÉVERSIBLE !',
+                'Supprimer toutes les données',
+                'Annuler'
+            );
+            
+            if (confirm === 'Supprimer toutes les données') {
+                // Double confirmation for such a destructive action
+                const doubleConfirm = await vscode.window.showWarningMessage(
+                    '🚨 CONFIRMATION FINALE\n\n' +
+                    'Êtes-vous ABSOLUMENT sûr de vouloir supprimer toutes les données ?\n' +
+                    'Cette action ne peut pas être annulée !',
+                    'OUI, supprimer tout',
+                    'Non, annuler'
+                );
+                
+                if (doubleConfirm === 'OUI, supprimer tout') {
+                    await vscode.window.withProgress({
+                        location: vscode.ProgressLocation.Notification,
+                        title: 'Suppression des données...',
+                        cancellable: false
+                    }, async (progress) => {
+                        progress.report({ message: 'Vidage de la base de données...' });
+                        
+                        await this.rulesManager.clearAllData();
+                        
+                        progress.report({ message: 'Actualisation des vues...' });
+                        
+                        // Refresh all tree views
+                        this.rulesExplorerProvider.refresh();
+                        this.activeRulesProvider.refresh();
+                        this.favoritesProvider.refresh();
+                    });
+                    
+                    vscode.window.showInformationMessage(
+                        '✅ Base de données vidée avec succès !\n\n' +
+                        'Utilisez "Refresh Rules" pour recharger les données depuis GitHub.'
+                    );
+                }
+            }
+        } catch (error) {
+            console.error('Failed to clear database:', error);
+            vscode.window.showErrorMessage(`Erreur lors du vidage de la base de données: ${error}`);
         }
     }
 

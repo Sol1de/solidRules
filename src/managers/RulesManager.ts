@@ -511,6 +511,16 @@ export class RulesManager {
         return formatDistanceToNow(date, { addSuffix: true });
     }
 
+    async clearAllData(): Promise<void> {
+        try {
+            await this.databaseManager.clearAllData();
+            this._onDidChangeRules.fire();
+        } catch (error) {
+            console.error('Failed to clear all data:', error);
+            throw error;
+        }
+    }
+
     dispose(): void {
         this._onDidChangeRules.dispose();
     }

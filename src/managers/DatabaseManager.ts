@@ -316,6 +316,21 @@ export class DatabaseManager {
         }
     }
 
+    async clearAllData(): Promise<void> {
+        try {
+            // Clear all stored data
+            await this.context.globalState.update(this.rulesStorageKey, []);
+            await this.context.globalState.update(this.workspacesStorageKey, []);
+            await this.context.globalState.update(this.updatesStorageKey, []);
+            await this.context.globalState.update(this.favoritesStorageKey, []);
+            
+            console.log('🗑️ All database data cleared successfully');
+        } catch (error) {
+            console.error('Failed to clear database:', error);
+            throw error;
+        }
+    }
+
     async close(): Promise<void> {
         // No cleanup needed for VSCode storage
         return Promise.resolve();
