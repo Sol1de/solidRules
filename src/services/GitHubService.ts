@@ -123,8 +123,11 @@ export class GitHubService {
 
     async createCursorRuleFromGitHub(ruleInfo: GitHubRuleInfo): Promise<CursorRule> {
         try {
-            const content = await this.fetchRuleContent(ruleInfo.path);
-            const { description, technologies } = await this.fetchRuleMetadata(ruleInfo.path);
+            // Fetch content and metadata in parallel for better performance
+            const [content, { description, technologies }] = await Promise.all([
+                this.fetchRuleContent(ruleInfo.path),
+                this.fetchRuleMetadata(ruleInfo.path)
+            ]);
             
             const ruleId = this.generateRuleId(ruleInfo.path);
             const category = this.getCategoryFromTechnologies(technologies);

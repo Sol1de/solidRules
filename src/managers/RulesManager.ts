@@ -67,23 +67,61 @@ export class RulesManager {
                     progress.report({ message: 'Fetching rules list...' });
                     
                     const githubRules = await this.githubService.fetchRulesList();
-                    progress.report({ message: `Found ${githubRules.length} rules. Processing...` });
+                    const existingRules = await this.databaseManager.getAllRules();
                     
+                    // Filter out rules that haven't changed (same SHA)
+                    const existingRulesMap = new Map(
+                        existingRules
+                            .filter(r => r.githubPath && !r.isCustom)
+                            .map(r => [r.githubPath, r.version])
+                    );
+                    
+                    const rulesToUpdate = githubRules.filter(githubRule => {
+                        const existingVersion = existingRulesMap.get(githubRule.path);
+                        return !existingVersion || existingVersion !== githubRule.sha;
+                    });
+                    
+                    if (rulesToUpdate.length === 0) {
+                        progress.report({ message: 'All rules are up to date!' });
+                        return;
+                    }
+                    
+                    progress.report({ 
+                        message: `Found ${githubRules.length} rules. ${rulesToUpdate.length} need updating...` 
+                    });
+                    
+                    // Process rules in parallel batches for better performance
+                    const BATCH_SIZE = 10; // Process 10 rules at a time
                     let processedCount = 0;
-                    for (const githubRule of githubRules) {
-                        try {
-                            const cursorRule = await this.githubService.createCursorRuleFromGitHub(githubRule);
-                            cursorRule.version = githubRule.sha;
-                            await this.databaseManager.saveRule(cursorRule);
-                            
-                            processedCount++;
-                            progress.report({ 
-                                message: `Processing ${processedCount}/${githubRules.length}...`,
-                                increment: (100 / githubRules.length) 
-                            });
-                        } catch (error) {
-                            console.error(`Failed to process rule ${githubRule.name}:`, error);
-                        }
+                    
+                    for (let i = 0; i < rulesToUpdate.length; i += BATCH_SIZE) {
+                        const batch = rulesToUpdate.slice(i, i + BATCH_SIZE);
+                        
+                        // Process batch in parallel
+                        const batchPromises = batch.map(async (githubRule) => {
+                            try {
+                                const cursorRule = await this.githubService.createCursorRuleFromGitHub(githubRule);
+                                cursorRule.version = githubRule.sha;
+                                await this.databaseManager.saveRule(cursorRule);
+                                return { success: true, rule: githubRule.name };
+                            } catch (error) {
+                                console.error(`Failed to process rule ${githubRule.name}:`, error);
+                                return { success: false, rule: githubRule.name, error };
+                            }
+                        });
+                        
+                        const batchResults = await Promise.allSettled(batchPromises);
+                        processedCount += batch.length;
+                        
+                        progress.report({ 
+                            message: `Processing ${processedCount}/${rulesToUpdate.length}... (${Math.round((processedCount / rulesToUpdate.length) * 100)}%)`,
+                            increment: (batch.length / rulesToUpdate.length) * 100
+                        });
+                        
+                        // Log batch results
+                        const successful = batchResults.filter(r => r.status === 'fulfilled').length;
+                        const failed = batchResults.filter(r => r.status === 'rejected').length;
+                        console.log(`Batch ${Math.ceil(i / BATCH_SIZE) + 1}: ${successful} success, ${failed} failed`);
                     }
                     
                     progress.report({ message: 'Finalizing...' });
