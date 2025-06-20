@@ -53,6 +53,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     private async getRootItems(): Promise<RuleTreeItem[]> {
         try {
             const rules = await this.rulesManager.searchRules(this.searchQuery, this.currentFilters);
+            console.log(`📊 TreeView getRootItems: Found ${rules.length} total rules`);
             
             if (rules.length === 0) {
                 return [new RuleTreeItem(
@@ -88,13 +89,18 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     description += ` • ${favoriteCount} favorites`;
                 }
 
-                return new RuleTreeItem(
+                const treeItem = new RuleTreeItem(
                     category,
-                    vscode.TreeItemCollapsibleState.Collapsed,
+                    vscode.TreeItemCollapsibleState.Expanded,
                     'category',
                     description,
                     category
                 );
+                
+                // Log for debugging
+                console.log(`📁 Category ${category}: ${categoryRules.length} rules, ${activeCount} active, ${favoriteCount} favorites`);
+                
+                return treeItem;
             });
 
         } catch (error) {
@@ -109,8 +115,10 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
 
     private async getCategoryRules(category: string): Promise<RuleTreeItem[]> {
         try {
+            console.log(`🔍 Getting rules for category: ${category}`);
             const allRules = await this.rulesManager.searchRules(this.searchQuery, this.currentFilters);
             const categoryRules = allRules.filter(rule => (rule.category || 'Other') === category);
+            console.log(`📋 Found ${categoryRules.length} rules in category ${category}`);
 
             return categoryRules.map(rule => {
                 const treeItem = new RuleTreeItem(

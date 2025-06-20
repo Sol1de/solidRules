@@ -38,6 +38,8 @@ export class RulesManager {
         }
     }
 
+
+
     async refreshRules(): Promise<void> {
         try {
             // Refresh GitHub token first (in case it was just configured)
@@ -60,6 +62,8 @@ export class RulesManager {
                     return; // Exit, user can retry after setup
                 }
             }
+
+            let processedRulesCount = 0;
             
             await this.notificationManager.showProgress(
                 'Refreshing rules from GitHub...',
@@ -69,6 +73,9 @@ export class RulesManager {
                     const githubRules = await this.githubService.fetchRulesList();
                     const existingRules = await this.databaseManager.getAllRules();
                     
+                    console.log(`📊 Database contains ${existingRules.length} existing rules`);
+                    console.log(`📊 GitHub returned ${githubRules.length} rules from API`);
+                    
                     // Filter out rules that haven't changed (same SHA)
                     const existingRulesMap = new Map(
                         existingRules
@@ -76,61 +83,176 @@ export class RulesManager {
                             .map(r => [r.githubPath, r.version])
                     );
                     
-                    const rulesToUpdate = githubRules.filter(githubRule => {
-                        const existingVersion = existingRulesMap.get(githubRule.path);
-                        return !existingVersion || existingVersion !== githubRule.sha;
-                    });
+                    console.log(`📊 Found ${existingRulesMap.size} existing GitHub rules in database`);
+                    
+                    // Smart refresh logic: if database is empty or very few rules, force full refresh
+                    const shouldForceRefresh = existingRules.length === 0 || existingRules.length < (githubRules.length * 0.5);
+                    
+                    let rulesToUpdate: typeof githubRules;
+                    
+                    if (shouldForceRefresh) {
+                        console.log(`🔄 Smart refresh: Database has ${existingRules.length} rules, GitHub has ${githubRules.length}. Forcing full refresh...`);
+                        progress.report({ message: `Loading ALL ${githubRules.length} rules...` });
+                        rulesToUpdate = githubRules; // Process ALL rules
+                    } else {
+                        // Normal incremental refresh
+                        rulesToUpdate = githubRules.filter(githubRule => {
+                            const existingVersion = existingRulesMap.get(githubRule.path);
+                            const needsUpdate = !existingVersion || existingVersion !== githubRule.sha;
+                            
+                            if (!needsUpdate) {
+                                console.log(`⏭️ Skipping ${githubRule.name} (up to date: ${existingVersion} === ${githubRule.sha})`);
+                            }
+                            
+                            return needsUpdate;
+                        });
+                        console.log(`📊 Incremental refresh: ${rulesToUpdate.length} rules need updating out of ${githubRules.length} total`);
+                        progress.report({ 
+                            message: `Found ${githubRules.length} rules. ${rulesToUpdate.length} need updating...` 
+                        });
+                    }
                     
                     if (rulesToUpdate.length === 0) {
                         progress.report({ message: 'All rules are up to date!' });
+                        processedRulesCount = 0; // No rules processed
                         return;
                     }
                     
-                    progress.report({ 
-                        message: `Found ${githubRules.length} rules. ${rulesToUpdate.length} need updating...` 
-                    });
+                    // Dynamic batch size based on GitHub token availability
+                    const config = vscode.workspace.getConfiguration('solidrules');
+                    const hasToken = !!config.get<string>('githubToken', '');
                     
-                    // Process rules in parallel batches for better performance
-                    const BATCH_SIZE = 10; // Process 10 rules at a time
+                    // Optimize batch size based on rate limits and rule count
+                    let BATCH_SIZE: number;
+                    
+                    if (hasToken) {
+                        // With token: aggressive parallelization
+                        if (rulesToUpdate.length <= 20) {
+                            BATCH_SIZE = rulesToUpdate.length; // Process all at once for small sets
+                        } else if (rulesToUpdate.length <= 100) {
+                            BATCH_SIZE = Math.min(75, Math.ceil(rulesToUpdate.length / 2)); // Half at a time, up to 75
+                        } else {
+                            BATCH_SIZE = 100; // Maximum safe concurrent requests
+                        }
+                    } else {
+                        // Without token: very conservative
+                        BATCH_SIZE = Math.min(3, Math.ceil(rulesToUpdate.length / 15));
+                    }
+                    
+                    console.log(`🚀 Processing ${rulesToUpdate.length} rules with batch size: ${BATCH_SIZE} (Token: ${hasToken ? '✅' : '❌'})`);
+                    
+                    const startTime = Date.now();
                     let processedCount = 0;
+                    let totalRetries = 0;
+                    let totalErrors = 0;
                     
                     for (let i = 0; i < rulesToUpdate.length; i += BATCH_SIZE) {
                         const batch = rulesToUpdate.slice(i, i + BATCH_SIZE);
                         
-                        // Process batch in parallel
-                        const batchPromises = batch.map(async (githubRule) => {
+                                            // Process batch in parallel - fetch rules first, then batch save
+                    const batchPromises = batch.map(async (githubRule, index) => {
+                        const maxRetries = 3;
+                        let attempt = 0;
+                        
+                        while (attempt < maxRetries) {
                             try {
+                                // Add small delay between retries to avoid rate limiting
+                                if (attempt > 0) {
+                                    const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
+                                    await new Promise(resolve => setTimeout(resolve, delay));
+                                    console.log(`🔄 Retry ${attempt}/${maxRetries} for ${githubRule.name}`);
+                                }
+                                
                                 const cursorRule = await this.githubService.createCursorRuleFromGitHub(githubRule);
                                 cursorRule.version = githubRule.sha;
-                                await this.databaseManager.saveRule(cursorRule);
-                                return { success: true, rule: githubRule.name };
-                            } catch (error) {
-                                console.error(`Failed to process rule ${githubRule.name}:`, error);
-                                return { success: false, rule: githubRule.name, error };
+                                console.log(`📥 Fetched rule: ${githubRule.name} (${cursorRule.category || 'Other'})`);
+                                return { success: true, rule: cursorRule, attempt: attempt + 1, name: githubRule.name };
+                            } catch (error: any) {
+                                attempt++;
+                                
+                                // If it's a rate limit error and we have retries left, wait longer
+                                if (error.message?.includes('rate limit') && attempt < maxRetries) {
+                                    const rateLimitDelay = hasToken ? 2000 : 10000; // 2s with token, 10s without
+                                    console.warn(`⚠️ Rate limit hit for ${githubRule.name}, waiting ${rateLimitDelay}ms...`);
+                                    await new Promise(resolve => setTimeout(resolve, rateLimitDelay));
+                                    continue;
+                                }
+                                
+                                if (attempt >= maxRetries) {
+                                    console.error(`❌ Failed to process rule ${githubRule.name} after ${maxRetries} attempts:`, error);
+                                    return { success: false, rule: null, error, attempts: attempt, name: githubRule.name };
+                                }
                             }
-                        });
+                        }
                         
-                        const batchResults = await Promise.allSettled(batchPromises);
-                        processedCount += batch.length;
+                        return { success: false, rule: null, error: 'Max retries exceeded', name: githubRule.name };
+                    });
                         
-                        progress.report({ 
-                            message: `Processing ${processedCount}/${rulesToUpdate.length}... (${Math.round((processedCount / rulesToUpdate.length) * 100)}%)`,
-                            increment: (batch.length / rulesToUpdate.length) * 100
-                        });
+                                            const batchResults = await Promise.allSettled(batchPromises);
+                    
+                    // Extract successfully fetched rules for batch save
+                    const successfulRules: CursorRule[] = [];
+                    batchResults.forEach(result => {
+                        if (result.status === 'fulfilled' && result.value.success && result.value.rule) {
+                            successfulRules.push(result.value.rule);
+                        }
+                    });
+                    
+                    // Batch save all successful rules at once
+                    if (successfulRules.length > 0) {
+                        await this.databaseManager.saveRulesBatch(successfulRules);
+                    }
+                    
+                    processedCount += batch.length;
+                    
+                    progress.report({ 
+                        message: `Processing ${processedCount}/${rulesToUpdate.length}... (${Math.round((processedCount / rulesToUpdate.length) * 100)}%)`,
+                        increment: (batch.length / rulesToUpdate.length) * 100
+                    });
                         
-                        // Log batch results
+                        // Enhanced batch logging with performance metrics
+                        const batchStartTime = Date.now();
                         const successful = batchResults.filter(r => r.status === 'fulfilled').length;
                         const failed = batchResults.filter(r => r.status === 'rejected').length;
-                        console.log(`Batch ${Math.ceil(i / BATCH_SIZE) + 1}: ${successful} success, ${failed} failed`);
+                        const batchTime = Date.now() - batchStartTime;
+                        
+                        // Calculate retry statistics
+                        const retryStats = batchResults
+                            .filter(r => r.status === 'fulfilled' && (r as PromiseFulfilledResult<any>).value.success)
+                            .map(r => ((r as PromiseFulfilledResult<any>).value as any)?.attempt || 1);
+                        const avgRetries = retryStats.length > 0 
+                            ? (retryStats.reduce((a, b) => a + b, 0) / retryStats.length).toFixed(1)
+                            : '0';
+                        
+                        const batchNum = Math.ceil((i + BATCH_SIZE) / BATCH_SIZE);
+                        const totalBatches = Math.ceil(rulesToUpdate.length / BATCH_SIZE);
+                        
+                        console.log(`📦 Batch ${batchNum}/${totalBatches}: ✅ ${successful} success, ❌ ${failed} failed, ⏱️ ${batchTime}ms, 🔄 avg ${avgRetries} retries`);
+                        
+                        // Update global statistics
+                        totalRetries += retryStats.reduce((a, b) => a + b, 0) - retryStats.length; // Only count extra retries
+                        totalErrors += failed;
                     }
                     
                     progress.report({ message: 'Finalizing...' });
+                    
+                    // Final performance summary
+                    const totalTime = Date.now() - startTime;
+                    const rulesPerSecond = ((processedCount / totalTime) * 1000).toFixed(1);
+                    const successRate = (((processedCount - totalErrors) / processedCount) * 100).toFixed(1);
+                    
+                    console.log(`🏁 Completed! ${processedCount} rules processed in ${totalTime}ms`);
+                    console.log(`📊 Performance: ${rulesPerSecond} rules/sec, ${successRate}% success rate, ${totalRetries} retries, ${totalErrors} errors`);
+                    
+                    // Store the count for notification
+                    processedRulesCount = processedCount;
                 }
             );
 
-            await this.notificationManager.showRulesRefreshedNotification(
-                (await this.databaseManager.getAllRules()).length
-            );
+            const finalRuleCount = (await this.databaseManager.getAllRules()).length;
+            console.log(`📊 Final database count: ${finalRuleCount} total rules`);
+            console.log(`📊 Rules processed in this refresh: ${processedRulesCount}`);
+            await this.notificationManager.showRulesRefreshedNotification(processedRulesCount);
             
             this._onDidChangeRules.fire();
         } catch (error) {

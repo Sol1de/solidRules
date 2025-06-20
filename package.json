@@ -122,7 +122,7 @@
         "title": "Reset GitHub Token",
         "icon": "$(trash)"
       },
-      {
+            {
         "command": "solidrules.clearDatabase",
         "title": "Clear Database",
         "icon": "$(database)"
@@ -155,7 +155,7 @@
           "when": "view == solidrules.rulesExplorer",
           "group": "navigation"
         },
-        {
+                {
           "command": "solidrules.clearDatabase",
           "when": "view == solidrules.rulesExplorer",
           "group": "navigation"
