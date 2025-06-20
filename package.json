@@ -121,6 +121,11 @@
         "command": "solidrules.resetGitHubToken",
         "title": "Reset GitHub Token",
         "icon": "$(trash)"
+      },
+      {
+        "command": "solidrules.clearDatabase",
+        "title": "Clear Database",
+        "icon": "$(database)"
       }
     ],
     "menus": {
@@ -147,6 +152,11 @@
         },
         {
           "command": "solidrules.resetGitHubToken",
+          "when": "view == solidrules.rulesExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "solidrules.clearDatabase",
           "when": "view == solidrules.rulesExplorer",
           "group": "navigation"
         }
