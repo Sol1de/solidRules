@@ -85,6 +85,12 @@ export class RulesManager {
                     
                     console.log(`📊 Found ${existingRulesMap.size} existing GitHub rules in database`);
                     
+                    // Debug: Show some examples of existing rules
+                    const sampleRules = existingRules.slice(0, 3);
+                    sampleRules.forEach(rule => {
+                        console.log(`🔍 Sample rule: ${rule.name} | githubPath: ${rule.githubPath} | version: ${rule.version} | isCustom: ${rule.isCustom}`);
+                    });
+                    
                     // Smart refresh logic: if database is empty or very few rules, force full refresh
                     const shouldForceRefresh = existingRules.length === 0 || existingRules.length < (githubRules.length * 0.5);
                     
@@ -102,6 +108,8 @@ export class RulesManager {
                             
                             if (!needsUpdate) {
                                 console.log(`⏭️ Skipping ${githubRule.name} (up to date: ${existingVersion} === ${githubRule.sha})`);
+                            } else {
+                                console.log(`🔄 Needs update: ${githubRule.name} (existing: ${existingVersion}, new: ${githubRule.sha})`);
                             }
                             
                             return needsUpdate;
@@ -165,7 +173,7 @@ export class RulesManager {
                                 
                                 const cursorRule = await this.githubService.createCursorRuleFromGitHub(githubRule);
                                 cursorRule.version = githubRule.sha;
-                                console.log(`📥 Fetched rule: ${githubRule.name} (${cursorRule.category || 'Other'})`);
+                                console.log(`📥 Fetched rule: ${githubRule.name} (${cursorRule.category || 'Other'}) | SHA: ${githubRule.sha}`);
                                 return { success: true, rule: cursorRule, attempt: attempt + 1, name: githubRule.name };
                             } catch (error: any) {
                                 attempt++;
