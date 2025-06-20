@@ -67,6 +67,15 @@
           "light": "#e8f5e8",
           "highContrast": "#1e4620"
         }
+      },
+      {
+        "id": "solidrules.activeRule.foreground",
+        "description": "Foreground color for active rules",
+        "defaults": {
+          "dark": "#4caf50",
+          "light": "#2e7d32",
+          "highContrast": "#4caf50"
+        }
       }
     ],
     "resourceLabelFormatters": [
@@ -78,6 +87,14 @@
           "tildify": false,
           "workspaceSuffix": ""
         }
+      }
+    ],
+    "fileDecorations": [
+      {
+        "scheme": "rule-active",
+        "badge": "✓",
+        "color": "solidrules.activeRule.foreground",
+        "tooltip": "Active Rule"
       }
     ],
     "commands": [
@@ -148,6 +165,11 @@
         "command": "solidrules.clearDatabase",
         "title": "Clear Database",
         "icon": "$(database)"
+      },
+      {
+        "command": "solidrules.syncWorkspace",
+        "title": "Sync Workspace Files",
+        "icon": "$(sync)"
       }
     ],
     "menus": {

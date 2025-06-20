@@ -32,6 +32,7 @@ export class CommandManager {
             vscode.commands.registerCommand('solidrules.settings', () => this.openSettings()),
             vscode.commands.registerCommand('solidrules.updateRule', (ruleId: string) => this.updateRule(ruleId)),
             vscode.commands.registerCommand('solidrules.updateAllRules', () => this.updateAllRules()),
+            vscode.commands.registerCommand('solidrules.syncWorkspace', () => this.syncWorkspace()),
             vscode.commands.registerCommand('solidrules.clearFilters', () => this.clearFilters()),
             vscode.commands.registerCommand('solidrules.filterByTechnology', () => this.filterByTechnology()),
             vscode.commands.registerCommand('solidrules.filterByCategory', () => this.filterByCategory()),
@@ -176,15 +177,39 @@ export class CommandManager {
                 return;
             }
 
-            // Toggle without notifications for smoother UX
+            // Ultra-fast toggle: only update database state, no file operations
             if (rule.isActive) {
-                await this.rulesManager.deactivateRule(ruleId, false);
+                await this.rulesManager.fastDeactivateRule(ruleId);
             } else {
-                await this.rulesManager.activateRule(ruleId, false);
+                await this.rulesManager.fastActivateRule(ruleId);
             }
+
+            // Schedule a lazy workspace sync (non-blocking)
+            this.scheduleLazyWorkspaceSync();
         } catch (error) {
             console.error('Failed to toggle rule:', error);
         }
+    }
+
+    private workspaceSyncTimeout: NodeJS.Timeout | undefined;
+
+    private scheduleLazyWorkspaceSync(): void {
+        // Clear existing timeout
+        if (this.workspaceSyncTimeout) {
+            clearTimeout(this.workspaceSyncTimeout);
+        }
+
+        // Schedule workspace sync after 2 seconds of inactivity (lazy sync)
+        this.workspaceSyncTimeout = setTimeout(async () => {
+            try {
+                console.log('🔄 Lazy workspace sync starting...');
+                await this.rulesManager.syncWorkspaceFiles();
+                console.log('✅ Lazy workspace sync completed');
+                this.workspaceSyncTimeout = undefined;
+            } catch (error) {
+                console.error('Failed to sync workspace:', error);
+            }
+        }, 2000); // 2 seconds delay for true lazy loading
     }
 
     private async deleteRule(ruleIdOrTreeItem?: string | any): Promise<void> {
@@ -437,6 +462,17 @@ export class CommandManager {
             await this.rulesManager.updateAllRules();
         } catch (error) {
             console.error('Failed to update all rules:', error);
+        }
+    }
+
+    private async syncWorkspace(): Promise<void> {
+        try {
+            vscode.window.showInformationMessage('Synchronizing workspace files...');
+            await this.rulesManager.syncWorkspaceFiles();
+            vscode.window.showInformationMessage('Workspace synchronized successfully!');
+        } catch (error) {
+            console.error('Failed to sync workspace:', error);
+            vscode.window.showErrorMessage(`Failed to sync workspace: ${error}`);
         }
     }
 

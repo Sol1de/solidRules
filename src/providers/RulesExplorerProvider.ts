@@ -10,28 +10,15 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     private currentFilters: SearchFilters = { sortBy: 'recent' };
 
     constructor(private rulesManager: RulesManager) {
-        // Listen to rules changes with debouncing to avoid excessive refreshes
+        // Listen to rules changes with immediate refresh for better responsiveness
         this.rulesManager.onDidChangeRules(() => {
-            this.refreshDebounced();
+            this.refresh();
         });
     }
 
-    private refreshTimeout: NodeJS.Timeout | undefined;
-
     refresh(): void {
+        // Immediate refresh for better responsiveness during rapid clicks
         this._onDidChangeTreeData.fire();
-    }
-
-    private refreshDebounced(): void {
-        // Debounce refreshes to avoid rapid consecutive updates
-        if (this.refreshTimeout) {
-            clearTimeout(this.refreshTimeout);
-        }
-        
-        this.refreshTimeout = setTimeout(() => {
-            this._onDidChangeTreeData.fire();
-            this.refreshTimeout = undefined;
-        }, 100); // 100ms debounce
     }
 
     getTreeItem(element: RuleTreeItem): vscode.TreeItem {
@@ -138,11 +125,17 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
             console.log(`📋 Found ${categoryRules.length} rules in category ${category}`);
 
             return categoryRules.map(rule => {
+                // Create label with visual indicator for active rules
+                const displayName = rule.isActive ? `✓ ${rule.name}` : rule.name;
+                const description = rule.isActive ? 
+                    `${this.getRuleDescription(rule)} • ACTIVE` : 
+                    this.getRuleDescription(rule);
+
                 const treeItem = new RuleTreeItem(
-                    rule.name,
+                    displayName,
                     vscode.TreeItemCollapsibleState.None,
                     rule.isActive ? 'rule-active' : 'rule-inactive',
-                    this.getRuleDescription(rule),
+                    description,
                     undefined,
                     rule
                 );
@@ -151,7 +144,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                 if (rule.isFavorite) {
                     treeItem.iconPath = new vscode.ThemeIcon('heart-filled');
                 } else if (rule.isActive) {
-                    treeItem.iconPath = new vscode.ThemeIcon('check');
+                    treeItem.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
                 } else if (rule.isCustom) {
                     treeItem.iconPath = new vscode.ThemeIcon('edit');
                 } else {
@@ -165,7 +158,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     arguments: [rule.id]
                 };
 
-                // Add visual styling for active rules
+                // Add visual styling for active rules using resourceUri
                 if (rule.isActive) {
                     treeItem.resourceUri = vscode.Uri.parse(`rule-active:${rule.id}`);
                 }

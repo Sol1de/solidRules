@@ -10,6 +10,7 @@ import { TokenSetupViewProvider } from './providers/TokenSetupViewProvider';
 import { CommandManager } from './managers/CommandManager';
 import { NotificationManager } from './managers/NotificationManager';
 import { WorkspaceManager as WorkspaceManagerClass } from './managers/WorkspaceManager';
+import { ActiveRuleDecorator } from './decorators/ActiveRuleDecorator';
 
 let rulesManager: RulesManager;
 let commandManager: CommandManager;
@@ -40,11 +41,17 @@ export async function activate(context: vscode.ExtensionContext) {
         const activeRulesProvider = new ActiveRulesProvider(rulesManager);
         const favoritesProvider = new FavoritesProvider(rulesManager);
         const tokenSetupProvider = new TokenSetupViewProvider(context);
+        const activeRuleDecorator = new ActiveRuleDecorator();
         
         // Register tree data providers
         vscode.window.registerTreeDataProvider('solidrules.rulesExplorer', rulesExplorerProvider);
         vscode.window.registerTreeDataProvider('solidrules.activeRules', activeRulesProvider);
         vscode.window.registerTreeDataProvider('solidrules.favorites', favoritesProvider);
+        
+        // Register file decoration provider for visual styling
+        context.subscriptions.push(
+            vscode.window.registerFileDecorationProvider(activeRuleDecorator)
+        );
         
         // Register webview view provider
         context.subscriptions.push(
@@ -68,6 +75,29 @@ export async function activate(context: vscode.ExtensionContext) {
         // Initialize database and sync rules
         await databaseManager.initialize();
         await rulesManager.initializeRules();
+        
+        // Schedule initial workspace sync after extension loads
+        setTimeout(async () => {
+            try {
+                console.log('🚀 Initial workspace sync...');
+                await rulesManager.syncWorkspaceFiles();
+                console.log('✅ Initial workspace sync completed');
+            } catch (error) {
+                console.error('Initial workspace sync failed:', error);
+            }
+        }, 1000); // 1 second delay to let extension fully load
+        
+        // Register workspace sync on window close
+        context.subscriptions.push(
+            vscode.workspace.onWillSaveTextDocument(async () => {
+                // Trigger sync when user saves files (indicates active work)
+                try {
+                    await rulesManager.syncWorkspaceFiles();
+                } catch (error) {
+                    console.error('Workspace sync on save failed:', error);
+                }
+            })
+        );
         
         console.log('SolidRules extension activated successfully');
         

@@ -7,28 +7,15 @@ export class ActiveRulesProvider implements vscode.TreeDataProvider<ActiveRuleTr
     readonly onDidChangeTreeData: vscode.Event<ActiveRuleTreeItem | undefined | void> = this._onDidChangeTreeData.event;
 
     constructor(private rulesManager: RulesManager) {
-        // Listen to rules changes with debouncing
+        // Listen to rules changes with immediate refresh
         this.rulesManager.onDidChangeRules(() => {
-            this.refreshDebounced();
+            this.refresh();
         });
     }
 
-    private refreshTimeout: NodeJS.Timeout | undefined;
-
     refresh(): void {
+        // Immediate refresh for better responsiveness
         this._onDidChangeTreeData.fire();
-    }
-
-    private refreshDebounced(): void {
-        // Debounce refreshes to avoid rapid consecutive updates
-        if (this.refreshTimeout) {
-            clearTimeout(this.refreshTimeout);
-        }
-        
-        this.refreshTimeout = setTimeout(() => {
-            this._onDidChangeTreeData.fire();
-            this.refreshTimeout = undefined;
-        }, 100); // 100ms debounce
     }
 
     getTreeItem(element: ActiveRuleTreeItem): vscode.TreeItem {
