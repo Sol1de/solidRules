@@ -1,0 +1,250 @@
+{
+  "name": "solidrules",
+  "displayName": "SolidRules",
+  "description": "Visual CursorRules manager for AI-powered development with Cursor IDE",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Snippets",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "cursor",
+    "cursorrules",
+    "ai",
+    "code-generation",
+    "productivity",
+    "rules"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "views": {
+      "solidrules": [
+        {
+          "id": "solidrules.rulesExplorer",
+          "name": "Rules Explorer",
+          "when": "solidrules.tokenConfigured"
+        },
+        {
+          "id": "solidrules.tokenSetup",
+          "name": "Configuration",
+          "type": "webview",
+          "when": "!solidrules.tokenConfigured"
+        },
+        {
+          "id": "solidrules.activeRules",
+          "name": "Active Rules",
+          "when": "solidrules.tokenConfigured"
+        },
+        {
+          "id": "solidrules.favorites",
+          "name": "Favorites",
+          "when": "solidrules.tokenConfigured"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "solidrules",
+          "title": "SolidRules",
+          "icon": "$(book)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "solidrules.refreshRules",
+        "title": "Refresh Rules",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "solidrules.searchRules",
+        "title": "Search Rules",
+        "icon": "$(search)"
+      },
+      {
+        "command": "solidrules.activateRule",
+        "title": "Activate Rule"
+      },
+      {
+        "command": "solidrules.deactivateRule",
+        "title": "Deactivate Rule"
+      },
+      {
+        "command": "solidrules.previewRule",
+        "title": "Preview Rule",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "solidrules.addToFavorites",
+        "title": "Add to Favorites",
+        "icon": "$(heart)"
+      },
+      {
+        "command": "solidrules.removeFromFavorites",
+        "title": "Remove from Favorites",
+        "icon": "$(heart-filled)"
+      },
+      {
+        "command": "solidrules.importCustomRule",
+        "title": "Import Custom Rule",
+        "icon": "$(add)"
+      },
+      {
+        "command": "solidrules.exportRules",
+        "title": "Export Rules",
+        "icon": "$(export)"
+      },
+      {
+        "command": "solidrules.settings",
+        "title": "Settings",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "solidrules.configureGitHubToken",
+        "title": "Configure GitHub Token",
+        "icon": "$(key)"
+      },
+      {
+        "command": "solidrules.skipTokenSetup",
+        "title": "Skip Token Setup",
+        "icon": "$(warning)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "solidrules.refreshRules",
+          "when": "view == solidrules.rulesExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "solidrules.searchRules",
+          "when": "view == solidrules.rulesExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "solidrules.importCustomRule",
+          "when": "view == solidrules.rulesExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "solidrules.configureGitHubToken",
+          "when": "view == solidrules.rulesExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "solidrules.activateRule",
+          "when": "view == solidrules.rulesExplorer && viewItem == rule-inactive",
+          "group": "solidrules@1"
+        },
+        {
+          "command": "solidrules.deactivateRule",
+          "when": "view == solidrules.activeRules && viewItem == rule-active",
+          "group": "solidrules@1"
+        },
+        {
+          "command": "solidrules.previewRule",
+          "when": "view == solidrules.rulesExplorer && viewItem == rule-inactive",
+          "group": "solidrules@2"
+        },
+        {
+          "command": "solidrules.addToFavorites",
+          "when": "view == solidrules.rulesExplorer && viewItem == rule-inactive",
+          "group": "solidrules@3"
+        },
+        {
+          "command": "solidrules.removeFromFavorites",
+          "when": "view == solidrules.favorites && viewItem == rule-favorite",
+          "group": "solidrules@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SolidRules",
+      "properties": {
+        "solidrules.autoRefresh": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically refresh rules on startup"
+        },
+        "solidrules.refreshInterval": {
+          "type": "number",
+          "default": 24,
+          "description": "Auto refresh interval in hours"
+        },
+        "solidrules.rulesDirectory": {
+          "type": "string",
+          "default": "cursorRules",
+          "description": "Directory name for storing cursor rules"
+        },
+        "solidrules.enableNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable update notifications"
+        },
+        "solidrules.defaultSortOrder": {
+          "type": "string",
+          "enum": [
+            "recent",
+            "alphabetical",
+            "popularity"
+          ],
+          "default": "recent",
+          "description": "Default sort order for rules"
+        },
+        "solidrules.githubToken": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub Personal Access Token for higher rate limits (optional but recommended)"
+        },
+        "solidrules.tokenSetupCompleted": {
+          "type": "boolean",
+          "default": false,
+          "description": "Internal: Whether the GitHub token setup flow has been completed"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "npm run build",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node16 --sourcemap",
+    "build:watch": "npm run build -- --watch",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "esbuild": "^0.19.8",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.2",
+    "date-fns": "^3.0.6"
+  },
+  "publisher": "solidrules",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solidrules/solidrules-vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/solidrules/solidrules-vscode/issues"
+  },
+  "homepage": "https://github.com/solidrules/solidrules-vscode#readme",
+  "license": "MIT"
+}

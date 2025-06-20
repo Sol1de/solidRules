@@ -1,0 +1,60 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "npm: build",
+            "type": "shell",
+            "command": "npm",
+            "args": ["run", "build"],
+            "group": "build",
+            "presentation": {
+                "panel": "dedicated",
+                "reveal": "never"
+            },
+            "problemMatcher": []
+        },
+        {
+            "type": "npm",
+            "script": "build",
+            "group": "build",
+            "presentation": {
+                "panel": "dedicated",
+                "reveal": "never"
+            },
+            "problemMatcher": [
+                "$tsc"
+            ]
+        },
+        {
+            "type": "npm",
+            "script": "build:watch",
+            "group": "build",
+            "presentation": {
+                "panel": "dedicated",
+                "reveal": "never"
+            },
+            "problemMatcher": [
+                "$tsc-watch"
+            ],
+            "isBackground": true
+        },
+        {
+            "type": "npm",
+            "script": "lint",
+            "group": "test",
+            "presentation": {
+                "panel": "dedicated",
+                "reveal": "silent"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "lint:fix",
+            "group": "test",
+            "presentation": {
+                "panel": "dedicated",
+                "reveal": "silent"
+            }
+        }
+    ]
+} 
