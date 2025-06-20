@@ -35,6 +35,7 @@ export class CommandManager {
             vscode.commands.registerCommand('solidrules.filterByCategory', () => this.filterByCategory()),
             vscode.commands.registerCommand('solidrules.sortRules', () => this.sortRules()),
             vscode.commands.registerCommand('solidrules.configureGitHubToken', () => this.configureGitHubToken()),
+            vscode.commands.registerCommand('solidrules.resetGitHubToken', () => this.resetGitHubToken()),
             vscode.commands.registerCommand('solidrules.skipTokenSetup', () => this.skipTokenSetup())
         );
 
@@ -435,6 +436,41 @@ export class CommandManager {
         const githubService = (this.rulesManager as any).githubService;
         if (githubService && typeof githubService.refreshToken === 'function') {
             githubService.refreshToken();
+        }
+    }
+
+    private async resetGitHubToken(): Promise<void> {
+        try {
+            const confirm = await vscode.window.showWarningMessage(
+                'Êtes-vous sûr de vouloir supprimer votre token GitHub ? Cela supprimera le token et vous ramènera à l\'écran de configuration.',
+                'Supprimer le token',
+                'Annuler'
+            );
+            
+            if (confirm === 'Supprimer le token') {
+                const config = vscode.workspace.getConfiguration('solidrules');
+                await config.update('githubToken', '', vscode.ConfigurationTarget.Global);
+                await config.update('tokenSetupCompleted', false, vscode.ConfigurationTarget.Global);
+                
+                // Set context to show token setup panel
+                vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', false);
+                
+                // Refresh GitHub service to use no token
+                const githubService = (this.rulesManager as any).githubService;
+                if (githubService && typeof githubService.refreshToken === 'function') {
+                    githubService.refreshToken();
+                }
+                
+                // Refresh tree views
+                this.rulesExplorerProvider.refresh();
+                this.activeRulesProvider.refresh();
+                this.favoritesProvider.refresh();
+                
+                vscode.window.showInformationMessage('Token GitHub supprimé. Vous pouvez maintenant configurer un nouveau token.');
+            }
+        } catch (error) {
+            console.error('Failed to reset GitHub token:', error);
+            vscode.window.showErrorMessage('Erreur lors de la suppression du token GitHub');
         }
     }
 

@@ -20,6 +20,7 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(
             async (message) => {
+                console.log('Message received from webview:', message);
                 switch (message.command) {
                     case 'saveToken':
                         if (message.token && message.token.trim()) {
@@ -31,8 +32,22 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
                             vscode.window.showErrorMessage('Veuillez entrer un token valide.');
                         }
                         break;
+                    case 'resetToken':
+                        vscode.commands.executeCommand('solidrules.resetGitHubToken');
+                        break;
                     case 'openGitHub':
-                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/settings/tokens/new?scopes=public_repo&description=SolidRules%20VSCode%20Extension'));
+                        console.log('openGitHub case triggered');
+                        try {
+                            const githubUrl = 'https://github.com/settings/tokens/new?scopes=public_repo&description=SolidRules%20VSCode%20Extension';
+                            console.log('Opening URL:', githubUrl);
+                            await vscode.env.openExternal(vscode.Uri.parse(githubUrl));
+                            vscode.window.showInformationMessage('Page GitHub ouverte dans votre navigateur');
+                            console.log('GitHub page opened successfully');
+                        } catch (error) {
+                            console.error('Error opening GitHub:', error);
+                            vscode.window.showErrorMessage(`Impossible d'ouvrir GitHub: ${error}`);
+                            vscode.window.showInformationMessage('Copiez cette URL dans votre navigateur: https://github.com/settings/tokens/new?scopes=public_repo&description=SolidRules%20VSCode%20Extension');
+                        }
                         break;
                 }
             }
@@ -53,7 +68,7 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource};">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline';">
     <title>Configuration SolidRules</title>
     <style>
         body {
@@ -206,7 +221,7 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
         </div>
         
         <div class="github-link">
-            <button class="button secondary" onclick="openGitHub()">
+            <button class="button secondary" id="githubButton">
                 Créer un token GitHub
             </button>
         </div>
@@ -227,8 +242,11 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
     </div>
 
     <div class="actions">
-        <button class="button" onclick="saveToken()">
+        <button class="button" id="saveButton">
             Configurer SolidRules
+        </button>
+        <button class="button secondary" id="resetButton" style="margin-top: 8px;">
+            Supprimer le token existant
         </button>
     </div>
 
@@ -248,21 +266,41 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
         }
         
         function openGitHub() {
+            console.log('openGitHub function called');
             vscode.postMessage({
                 command: 'openGitHub'
             });
+            console.log('Message sent to VSCode');
+        }
+        
+        function resetToken() {
+            if (confirm('Êtes-vous sûr de vouloir supprimer votre token GitHub ?')) {
+                vscode.postMessage({
+                    command: 'resetToken'
+                });
+            }
         }
 
-        // Focus on input when loaded
+        // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
+            // Focus on input when loaded
             document.getElementById('tokenInput').focus();
-        });
-
-        // Allow Enter key to save token
-        document.getElementById('tokenInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                saveToken();
-            }
+            
+            // GitHub button
+            document.getElementById('githubButton').addEventListener('click', openGitHub);
+            
+            // Save button
+            document.getElementById('saveButton').addEventListener('click', saveToken);
+            
+            // Reset button
+            document.getElementById('resetButton').addEventListener('click', resetToken);
+            
+            // Allow Enter key to save token
+            document.getElementById('tokenInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    saveToken();
+                }
+            });
         });
     </script>
 </body>

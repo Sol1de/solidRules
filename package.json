@@ -116,6 +116,11 @@
         "command": "solidrules.skipTokenSetup",
         "title": "Skip Token Setup",
         "icon": "$(warning)"
+      },
+      {
+        "command": "solidrules.resetGitHubToken",
+        "title": "Reset GitHub Token",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -137,6 +142,11 @@
         },
         {
           "command": "solidrules.configureGitHubToken",
+          "when": "view == solidrules.rulesExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "solidrules.resetGitHubToken",
           "when": "view == solidrules.rulesExplorer",
           "group": "navigation"
         }
