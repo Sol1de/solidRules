@@ -22,6 +22,7 @@ export class CommandManager {
             vscode.commands.registerCommand('solidrules.searchRules', () => this.searchRules()),
             vscode.commands.registerCommand('solidrules.activateRule', (ruleId: string) => this.activateRule(ruleId)),
             vscode.commands.registerCommand('solidrules.deactivateRule', (ruleId: string) => this.deactivateRule(ruleId)),
+            vscode.commands.registerCommand('solidrules.deleteRule', (ruleId: string) => this.deleteRule(ruleId)),
             vscode.commands.registerCommand('solidrules.previewRule', (ruleId: string) => this.previewRule(ruleId)),
             vscode.commands.registerCommand('solidrules.addToFavorites', (ruleId: string) => this.addToFavorites(ruleId)),
             vscode.commands.registerCommand('solidrules.removeFromFavorites', (ruleId: string) => this.removeFromFavorites(ruleId)),
@@ -163,6 +164,53 @@ export class CommandManager {
             }
         } catch (error) {
             console.error('Failed to deactivate rule:', error);
+        }
+    }
+
+    private async deleteRule(ruleIdOrTreeItem?: string | any): Promise<void> {
+        try {
+            let ruleId: string | undefined;
+            
+            // Handle different argument types
+            if (typeof ruleIdOrTreeItem === 'string') {
+                ruleId = ruleIdOrTreeItem;
+            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+                // TreeItem passed from context menu
+                ruleId = ruleIdOrTreeItem.rule.id;
+            }
+            
+            if (!ruleId) {
+                // Show quick pick to select rule
+                const rules = await this.rulesManager.getAllRules();
+                
+                if (rules.length === 0) {
+                    vscode.window.showInformationMessage('No rules available to delete');
+                    return;
+                }
+
+                const quickPickItems = rules.map(rule => ({
+                    label: rule.name,
+                    description: `${rule.category} • ${rule.technologies.join(', ')} ${rule.isCustom ? '(Custom)' : ''}`,
+                    detail: rule.description,
+                    rule
+                }));
+
+                const selected = await vscode.window.showQuickPick(quickPickItems, {
+                    placeHolder: 'Select a rule to delete permanently',
+                    matchOnDescription: true,
+                    matchOnDetail: true
+                });
+
+                if (selected) {
+                    ruleId = selected.rule.id;
+                }
+            }
+
+            if (ruleId) {
+                await this.rulesManager.deleteRule(ruleId);
+            }
+        } catch (error) {
+            console.error('Failed to delete rule:', error);
         }
     }
 

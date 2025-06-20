@@ -406,6 +406,13 @@ export class RulesManager {
             await this.databaseManager.updateRuleStatus(ruleId, false);
             rule.isActive = false;
 
+            // Remove the rule files from workspace
+            const config = vscode.workspace.getConfiguration('solidrules');
+            const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+            
+            await this.workspaceManager.removeProjectRule(rule);
+            await this.workspaceManager.removeRuleFromWorkspace(rule, rulesDirectory);
+
             await this.updateWorkspaceRules();
             await this.notificationManager.showRuleDeactivatedNotification(rule.name);
             
@@ -479,6 +486,15 @@ export class RulesManager {
             const confirmed = await this.notificationManager.confirmDeleteRule(rule.name);
             if (!confirmed) {
                 return;
+            }
+
+            // Remove rule files from workspace if active
+            if (rule.isActive) {
+                const config = vscode.workspace.getConfiguration('solidrules');
+                const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+                
+                await this.workspaceManager.removeProjectRule(rule);
+                await this.workspaceManager.removeRuleFromWorkspace(rule, rulesDirectory);
             }
 
             await this.databaseManager.deleteRule(ruleId);
