@@ -40,6 +40,9 @@ export class RulesManager {
 
     async refreshRules(): Promise<void> {
         try {
+            // Refresh GitHub token first (in case it was just configured)
+            this.githubService.refreshToken();
+            
             // Check if GitHub token is configured
             const config = vscode.workspace.getConfiguration('solidrules');
             const githubToken = config.get<string>('githubToken', '');

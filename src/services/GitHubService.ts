@@ -17,18 +17,20 @@ export class GitHubService {
         const githubToken = config.get<string>('githubToken', '');
         
         if (githubToken) {
-            console.log('Using GitHub token for API requests');
+            console.log('✅ Using GitHub token for API requests (5000 req/h)');
+            console.log(`Token starts with: ${githubToken.substring(0, 10)}...`);
             this.octokit = new Octokit({
                 auth: githubToken
             });
         } else {
-            console.log('Using GitHub API without token (rate limited)');
+            console.log('⚠️ Using GitHub API without token (60 req/h limit)');
             this.octokit = new Octokit();
         }
     }
 
     // Method to refresh token if settings change
     public refreshToken(): void {
+        console.log('🔄 Refreshing GitHub token...');
         this.initializeOctokit();
     }
 
