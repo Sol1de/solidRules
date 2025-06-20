@@ -32,6 +32,9 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
                             vscode.window.showErrorMessage('Veuillez entrer un token valide.');
                         }
                         break;
+                    case 'resetToken':
+                        vscode.commands.executeCommand('solidrules.resetGitHubToken');
+                        break;
                     case 'openGitHub':
                         console.log('openGitHub case triggered');
                         try {
@@ -242,6 +245,9 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
         <button class="button" id="saveButton">
             Configurer SolidRules
         </button>
+        <button class="button secondary" id="resetButton" style="margin-top: 8px;">
+            Supprimer le token existant
+        </button>
     </div>
 
     <script>
@@ -266,6 +272,14 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
             });
             console.log('Message sent to VSCode');
         }
+        
+        function resetToken() {
+            if (confirm('Êtes-vous sûr de vouloir supprimer votre token GitHub ?')) {
+                vscode.postMessage({
+                    command: 'resetToken'
+                });
+            }
+        }
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
@@ -277,6 +291,9 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
             
             // Save button
             document.getElementById('saveButton').addEventListener('click', saveToken);
+            
+            // Reset button
+            document.getElementById('resetButton').addEventListener('click', resetToken);
             
             // Allow Enter key to save token
             document.getElementById('tokenInput').addEventListener('keypress', function(e) {
