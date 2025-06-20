@@ -18,7 +18,7 @@ export class CommandManager {
     registerCommands(context: vscode.ExtensionContext): void {
         // Register all commands
         this.disposables.push(
-            vscode.commands.registerCommand('solidrules.refreshRules', () => this.refreshRules()),
+                        vscode.commands.registerCommand('solidrules.refreshRules', () => this.refreshRules()),
             vscode.commands.registerCommand('solidrules.searchRules', () => this.searchRules()),
             vscode.commands.registerCommand('solidrules.activateRule', (ruleId: string) => this.activateRule(ruleId)),
             vscode.commands.registerCommand('solidrules.deactivateRule', (ruleId: string) => this.deactivateRule(ruleId)),
@@ -51,6 +51,8 @@ export class CommandManager {
             console.error('Failed to refresh rules:', error);
         }
     }
+
+
 
     private async searchRules(): Promise<void> {
         try {

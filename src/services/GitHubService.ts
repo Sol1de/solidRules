@@ -36,6 +36,8 @@ export class GitHubService {
 
     async fetchRulesList(): Promise<GitHubRuleInfo[]> {
         try {
+            console.log(`📡 Fetching rules list from ${this.REPO_OWNER}/${this.REPO_NAME}/${this.RULES_PATH}...`);
+            
             const response = await this.octokit.repos.getContent({
                 owner: this.REPO_OWNER,
                 repo: this.REPO_NAME,
@@ -43,20 +45,33 @@ export class GitHubService {
             });
 
             if (Array.isArray(response.data)) {
-                return response.data
-                    .filter(item => item.type === 'dir')
-                    .map(item => ({
-                        path: item.path,
-                        name: item.name,
-                        sha: item.sha,
-                        size: item.size || 0,
-                        download_url: item.download_url || '',
-                        type: item.type as 'file' | 'dir'
-                    }));
+                const allItems = response.data;
+                const directories = allItems.filter(item => item.type === 'dir');
+                
+                console.log(`📊 GitHub API returned ${allItems.length} total items, ${directories.length} directories (rules)`);
+                
+                // Log some examples for debugging
+                if (directories.length > 0) {
+                    console.log(`📁 First few rules: ${directories.slice(0, 5).map(d => d.name).join(', ')}...`);
+                }
+                
+                const rules = directories.map(item => ({
+                    path: item.path,
+                    name: item.name,
+                    sha: item.sha,
+                    size: item.size || 0,
+                    download_url: item.download_url || '',
+                    type: item.type as 'file' | 'dir'
+                }));
+                
+                console.log(`✅ Successfully parsed ${rules.length} rules`);
+                return rules;
             }
+            
+            console.warn('⚠️ GitHub API response is not an array');
             return [];
         } catch (error: any) {
-            console.error('Error fetching rules list:', error);
+            console.error('❌ Error fetching rules list:', error);
             
             // Handle rate limit specifically
             if (error.status === 403 && error.message?.includes('rate limit')) {
@@ -123,8 +138,11 @@ export class GitHubService {
 
     async createCursorRuleFromGitHub(ruleInfo: GitHubRuleInfo): Promise<CursorRule> {
         try {
-            const content = await this.fetchRuleContent(ruleInfo.path);
-            const { description, technologies } = await this.fetchRuleMetadata(ruleInfo.path);
+            // Fetch content and metadata in parallel for better performance
+            const [content, { description, technologies }] = await Promise.all([
+                this.fetchRuleContent(ruleInfo.path),
+                this.fetchRuleMetadata(ruleInfo.path)
+            ]);
             
             const ruleId = this.generateRuleId(ruleInfo.path);
             const category = this.getCategoryFromTechnologies(technologies);

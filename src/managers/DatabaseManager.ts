@@ -41,20 +41,48 @@ export class DatabaseManager {
         }
     }
 
+    private saveMutex: Promise<void> = Promise.resolve();
+
     async saveRule(rule: CursorRule): Promise<void> {
-        try {
-            const rules = await this.getAllRules();
-            const existingIndex = rules.findIndex(r => r.id === rule.id);
-            
-            if (existingIndex >= 0) {
-                rules[existingIndex] = rule;
-            } else {
-                rules.push(rule);
+        // Use mutex to prevent race conditions
+        this.saveMutex = this.saveMutex.then(async () => {
+            try {
+                const rules = await this.getAllRules();
+                const existingIndex = rules.findIndex(r => r.id === rule.id);
+                
+                if (existingIndex >= 0) {
+                    rules[existingIndex] = rule;
+                } else {
+                    rules.push(rule);
+                }
+                
+                await this.context.globalState.update(this.rulesStorageKey, rules);
+                console.log(`🔒 Saved rule ${rule.name}, total rules in DB: ${rules.length}`);
+            } catch (error) {
+                console.error('Failed to save rule:', error);
+                throw error;
             }
+        });
+        
+        return this.saveMutex;
+    }
+
+    async saveRulesBatch(rules: CursorRule[]): Promise<void> {
+        try {
+            console.log(`💾 Batch saving ${rules.length} rules...`);
+            const existingRules = await this.getAllRules();
+            const existingRulesMap = new Map(existingRules.map(r => [r.id, r]));
             
-            await this.context.globalState.update(this.rulesStorageKey, rules);
+            // Merge new rules with existing ones
+            rules.forEach(rule => {
+                existingRulesMap.set(rule.id, rule);
+            });
+            
+            const allRules = Array.from(existingRulesMap.values());
+            await this.context.globalState.update(this.rulesStorageKey, allRules);
+            console.log(`✅ Batch saved ${rules.length} rules, total in DB: ${allRules.length}`);
         } catch (error) {
-            console.error('Failed to save rule:', error);
+            console.error('Failed to batch save rules:', error);
             throw error;
         }
     }
