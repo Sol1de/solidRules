@@ -97,6 +97,9 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     category
                 );
                 
+                // Set folder icon for categories
+                treeItem.iconPath = new vscode.ThemeIcon('folder');
+                
                 // Log for debugging
                 console.log(`📁 Category ${category}: ${categoryRules.length} rules, ${activeCount} active, ${favoriteCount} favorites`);
                 
