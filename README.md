@@ -15,7 +15,7 @@ SolidRules is a powerful VSCode extension that provides a visual and intuitive w
 ### **Multi-Workspace Support**
 - **Workspace-Specific Rules**: Each workspace maintains its own active rules
 - **Rule Directory Management**: Organized storage in `cursorRules/` folder
-- **Master File Generation**: Automatic `.cursorrules` file creation and updates
+- **Project Rules Support**: Modern `.cursor/rules/` format with legacy `.cursorrules` compatibility
 
 ### **Smart Rule Activation**
 - **One-Click Activation**: Instantly apply rules to your workspace
@@ -28,7 +28,7 @@ SolidRules is a powerful VSCode extension that provides a visual and intuitive w
 - **Version Tracking**: Keep track of rule versions and changes
 
 ### **Custom Rules Support**
-- **Import Custom Rules**: Add your own .cursorrules files
+- **Import Custom Rules**: Add your own rules in modern MDC format
 - **Technology Tagging**: Organize custom rules with technologies and tags
 - **Export Functionality**: Share rule collections easily
 
@@ -71,7 +71,8 @@ SolidRules is a powerful VSCode extension that provides a visual and intuitive w
 ### 4. **Workspace Integration**
 - Active rules are automatically written to your workspace
 - Find individual rule files in the `cursorRules/` directory
-- The main `.cursorrules` file combines all active rules
+- Modern `.cursor/rules/` directory with individual rule files (MDC format)
+- Legacy `.cursorrules` support for backward compatibility
 
 ## 📚 Usage Guide
 
@@ -104,13 +105,18 @@ Filter → Category → Frontend
 #### **File Structure**
 ```
 your-project/
-├── .cursorrules              # Master file (auto-generated)
-├── cursorRules/              # Rules directory
-│   ├── react-typescript.cursorrules
-│   ├── tailwind-css.cursorrules
-│   └── custom-rule.cursorrules
+├── .cursor/
+│   └── rules/                # Modern Project Rules (recommended)
+│       ├── react-typescript.mdc
+│       ├── tailwind-css.mdc
+│       └── custom-rule.mdc
+├── cursorRules/              # Legacy directory (optional)
+│   └── *.cursorrules
+├── .cursorrules              # Legacy master file (optional)
 └── ...
 ```
+
+> **📋 Migration Note**: SolidRules now uses the modern `.cursor/rules/` format by default. See [MIGRATION.md](MIGRATION.md) for details.
 
 #### **Custom Rules**
 1. Click the "+" button in Rules Explorer

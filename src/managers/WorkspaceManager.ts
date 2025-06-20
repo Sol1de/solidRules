@@ -4,7 +4,8 @@ import * as fs from 'fs/promises';
 import { CursorRule, WorkspaceRuleConfig } from '../types';
 
 export class WorkspaceManager {
-    private readonly CURSOR_RULES_FILE = '.cursorrules';
+    private readonly CURSOR_RULES_FILE = '.cursorrules'; // Legacy support
+    private readonly PROJECT_RULES_DIR = '.cursor/rules';
 
     getCurrentWorkspaceId(): string | null {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -39,6 +40,23 @@ export class WorkspaceManager {
         }
     }
 
+    async createProjectRulesDirectory(): Promise<string | null> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) {
+            throw new Error('No workspace is currently open');
+        }
+
+        const rulesPath = path.join(workspaceId, this.PROJECT_RULES_DIR);
+        
+        try {
+            await fs.mkdir(rulesPath, { recursive: true });
+            return rulesPath;
+        } catch (error) {
+            console.error('Failed to create project rules directory:', error);
+            throw error;
+        }
+    }
+
     async writeRuleToWorkspace(rule: CursorRule, rulesDirectory: string = 'cursorRules'): Promise<void> {
         const workspaceId = this.getCurrentWorkspaceId();
         if (!workspaceId) {
@@ -63,6 +81,30 @@ export class WorkspaceManager {
         }
     }
 
+    async writeProjectRule(rule: CursorRule): Promise<void> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) {
+            throw new Error('No workspace is currently open');
+        }
+
+        const rulesPath = await this.createProjectRulesDirectory();
+        if (!rulesPath) {
+            throw new Error('Failed to create project rules directory');
+        }
+
+        const ruleFileName = `${this.sanitizeFileName(rule.name)}.mdc`;
+        const ruleFilePath = path.join(rulesPath, ruleFileName);
+
+        const content = this.formatProjectRuleContent(rule);
+        
+        try {
+            await fs.writeFile(ruleFilePath, content, 'utf-8');
+        } catch (error) {
+            console.error(`Failed to write project rule ${rule.name}:`, error);
+            throw error;
+        }
+    }
+
     async removeRuleFromWorkspace(rule: CursorRule, rulesDirectory: string = 'cursorRules'): Promise<void> {
         const workspaceId = this.getCurrentWorkspaceId();
         if (!workspaceId) {
@@ -78,6 +120,24 @@ export class WorkspaceManager {
         } catch (error) {
             // File might not exist, which is fine
             console.log(`Rule file ${ruleFileName} not found, skipping removal`);
+        }
+    }
+
+    async removeProjectRule(rule: CursorRule): Promise<void> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) {
+            throw new Error('No workspace is currently open');
+        }
+
+        const rulesPath = path.join(workspaceId, this.PROJECT_RULES_DIR);
+        const ruleFileName = `${this.sanitizeFileName(rule.name)}.mdc`;
+        const ruleFilePath = path.join(rulesPath, ruleFileName);
+
+        try {
+            await fs.unlink(ruleFilePath);
+        } catch (error) {
+            // File might not exist, which is fine
+            console.log(`Project rule file ${ruleFileName} not found, skipping removal`);
         }
     }
 
@@ -147,6 +207,51 @@ ${rule.content}
 `;
 
         return metadata + rule.content;
+    }
+
+    private formatProjectRuleContent(rule: CursorRule): string {
+        // Determine rule type based on rule properties
+        const ruleType = this.determineRuleType(rule);
+        
+        // YAML frontmatter for MDC format
+        const frontmatter = `---
+description: ${rule.description || rule.name}
+${ruleType.globs ? `globs: ${ruleType.globs}` : ''}
+alwaysApply: ${ruleType.alwaysApply}
+---
+
+`;
+
+        // Add metadata as comments
+        const metadata = `<!-- SolidRules Metadata
+Name: ${rule.name}
+Category: ${rule.category}
+Technologies: ${rule.technologies.join(', ')}
+Tags: ${rule.tags.join(', ')}
+Created: ${rule.createdAt.toISOString()}
+Last Updated: ${rule.lastUpdated?.toISOString() || 'Never'}
+Source: ${rule.isCustom ? 'Custom Rule' : 'GitHub - awesome-cursorrules'}
+-->
+
+`;
+
+        return frontmatter + metadata + rule.content;
+    }
+
+    private determineRuleType(rule: CursorRule): { globs?: string; alwaysApply: boolean } {
+        // Logic to determine rule type based on category and technologies
+        if (rule.category === 'Frontend' && rule.technologies.includes('react')) {
+            return { globs: '*.{tsx,jsx,ts,js}', alwaysApply: false };
+        } else if (rule.category === 'Backend' && rule.technologies.includes('python')) {
+            return { globs: '*.py', alwaysApply: false };
+        } else if (rule.category === 'Styling' && rule.technologies.includes('tailwind')) {
+            return { globs: '*.{css,scss,tsx,jsx}', alwaysApply: false };
+        } else if (rule.category === 'Database') {
+            return { globs: '*.sql', alwaysApply: false };
+        } else {
+            // Default to manual activation for general rules
+            return { alwaysApply: false };
+        }
     }
 
     private sanitizeFileName(name: string): string {
@@ -260,16 +365,22 @@ ${rule.content}
 
     async syncActiveRules(activeRules: CursorRule[], config: WorkspaceRuleConfig): Promise<void> {
         try {
-            // Create rules directory if it doesn't exist
-            await this.createCursorRulesDirectory(config.rulesDirectory);
+            // Create project rules directory (.cursor/rules)
+            await this.createProjectRulesDirectory();
 
-            // Write individual rule files
+            // Write individual rule files in new MDC format
             for (const rule of activeRules) {
-                await this.writeRuleToWorkspace(rule, config.rulesDirectory);
+                await this.writeProjectRule(rule);
             }
 
-            // Generate master .cursorrules file
-            await this.generateMasterCursorRulesFile(activeRules, config.rulesDirectory);
+            // Legacy support: still create old format if requested
+            if (config.maintainLegacyFormat) {
+                await this.createCursorRulesDirectory(config.rulesDirectory);
+                for (const rule of activeRules) {
+                    await this.writeRuleToWorkspace(rule, config.rulesDirectory);
+                }
+                await this.generateMasterCursorRulesFile(activeRules, config.rulesDirectory);
+            }
 
         } catch (error) {
             console.error('Failed to sync active rules to workspace:', error);
@@ -283,6 +394,49 @@ ${rule.content}
 
         for (const rule of inactiveRules) {
             await this.removeRuleFromWorkspace(rule, rulesDirectory);
+            await this.removeProjectRule(rule); // Also remove from project rules
+        }
+    }
+
+    async listProjectRuleFiles(): Promise<string[]> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) {
+            return [];
+        }
+
+        const rulesPath = path.join(workspaceId, this.PROJECT_RULES_DIR);
+        
+        try {
+            const files = await fs.readdir(rulesPath);
+            return files.filter(file => file.endsWith('.mdc'));
+        } catch {
+            return [];
+        }
+    }
+
+    async getProjectRulesStats(): Promise<{
+        totalProjectRules: number;
+        projectRulesDirectoryExists: boolean;
+        lastModified?: Date | undefined;
+    }> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) {
+            return { totalProjectRules: 0, projectRulesDirectoryExists: false };
+        }
+
+        const rulesPath = path.join(workspaceId, this.PROJECT_RULES_DIR);
+        
+        try {
+            const stats = await fs.stat(rulesPath);
+            const files = await this.listProjectRuleFiles();
+            
+            return {
+                totalProjectRules: files.length,
+                projectRulesDirectoryExists: true,
+                lastModified: stats.mtime
+            };
+        } catch {
+            return { totalProjectRules: 0, projectRulesDirectoryExists: false };
         }
     }
 } 

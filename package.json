@@ -231,6 +231,11 @@
           "type": "boolean",
           "default": false,
           "description": "Internal: Whether the GitHub token setup flow has been completed"
+        },
+        "solidrules.maintainLegacyFormat": {
+          "type": "boolean",
+          "default": false,
+          "description": "Maintain legacy .cursorrules format alongside new Project Rules format"
         }
       }
     }

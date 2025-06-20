@@ -51,6 +51,7 @@ export interface WorkspaceRuleConfig {
     activeRules: string[];
     rulesDirectory: string;
     lastSyncDate?: Date | undefined;
+    maintainLegacyFormat?: boolean; // Whether to maintain .cursorrules format alongside new format
 }
 
 export interface SearchFilters {

@@ -595,12 +595,14 @@ export class RulesManager {
             const activeRules = await this.databaseManager.getActiveRules();
             const config = vscode.workspace.getConfiguration('solidrules');
             const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+            const maintainLegacyFormat = config.get<boolean>('maintainLegacyFormat', false);
 
             const workspaceConfig: WorkspaceRuleConfig = {
                 workspaceId,
                 activeRules: activeRules.map(r => r.id),
                 rulesDirectory,
-                lastSyncDate: new Date()
+                lastSyncDate: new Date(),
+                maintainLegacyFormat
             };
 
             await this.databaseManager.saveWorkspaceConfig(workspaceConfig);

@@ -71,8 +71,18 @@ export class CommandManager {
         }
     }
 
-    private async activateRule(ruleId?: string): Promise<void> {
+    private async activateRule(ruleIdOrTreeItem?: string | any): Promise<void> {
         try {
+            let ruleId: string | undefined;
+            
+            // Handle different argument types
+            if (typeof ruleIdOrTreeItem === 'string') {
+                ruleId = ruleIdOrTreeItem;
+            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+                // TreeItem passed from context menu
+                ruleId = ruleIdOrTreeItem.rule.id;
+            }
+            
             if (!ruleId) {
                 // Show quick pick to select rule
                 const rules = await this.rulesManager.getAllRules();
@@ -109,8 +119,18 @@ export class CommandManager {
         }
     }
 
-    private async deactivateRule(ruleId?: string): Promise<void> {
+    private async deactivateRule(ruleIdOrTreeItem?: string | any): Promise<void> {
         try {
+            let ruleId: string | undefined;
+            
+            // Handle different argument types
+            if (typeof ruleIdOrTreeItem === 'string') {
+                ruleId = ruleIdOrTreeItem;
+            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+                // TreeItem passed from context menu
+                ruleId = ruleIdOrTreeItem.rule.id;
+            }
+            
             if (!ruleId) {
                 // Show quick pick to select rule
                 const activeRules = await this.rulesManager.getActiveRules();
@@ -146,8 +166,18 @@ export class CommandManager {
         }
     }
 
-    private async previewRule(ruleId?: string): Promise<void> {
+    private async previewRule(ruleIdOrTreeItem?: string | any): Promise<void> {
         try {
+            let ruleId: string | undefined;
+            
+            // Handle different argument types
+            if (typeof ruleIdOrTreeItem === 'string') {
+                ruleId = ruleIdOrTreeItem;
+            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+                // TreeItem passed from context menu
+                ruleId = ruleIdOrTreeItem.rule.id;
+            }
+            
             if (!ruleId) {
                 // Show quick pick to select rule
                 const rules = await this.rulesManager.getAllRules();
@@ -178,16 +208,42 @@ export class CommandManager {
         }
     }
 
-    private async addToFavorites(ruleId: string): Promise<void> {
+    private async addToFavorites(ruleIdOrTreeItem: string | any): Promise<void> {
         try {
+            let ruleId: string;
+            
+            // Handle different argument types
+            if (typeof ruleIdOrTreeItem === 'string') {
+                ruleId = ruleIdOrTreeItem;
+            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+                // TreeItem passed from context menu
+                ruleId = ruleIdOrTreeItem.rule.id;
+            } else {
+                console.error('Invalid ruleId provided to addToFavorites');
+                return;
+            }
+            
             await this.rulesManager.toggleRuleFavorite(ruleId);
         } catch (error) {
             console.error('Failed to add to favorites:', error);
         }
     }
 
-    private async removeFromFavorites(ruleId: string): Promise<void> {
+    private async removeFromFavorites(ruleIdOrTreeItem: string | any): Promise<void> {
         try {
+            let ruleId: string;
+            
+            // Handle different argument types
+            if (typeof ruleIdOrTreeItem === 'string') {
+                ruleId = ruleIdOrTreeItem;
+            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+                // TreeItem passed from context menu
+                ruleId = ruleIdOrTreeItem.rule.id;
+            } else {
+                console.error('Invalid ruleId provided to removeFromFavorites');
+                return;
+            }
+            
             await this.rulesManager.toggleRuleFavorite(ruleId);
         } catch (error) {
             console.error('Failed to remove from favorites:', error);
