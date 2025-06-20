@@ -91,7 +91,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
 
                 const treeItem = new RuleTreeItem(
                     category,
-                    vscode.TreeItemCollapsibleState.Expanded,
+                    vscode.TreeItemCollapsibleState.Collapsed,
                     'category',
                     description,
                     category
