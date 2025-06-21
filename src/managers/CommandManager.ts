@@ -18,6 +18,7 @@ export class CommandManager {
             vscode.commands.registerCommand('solidrules.activateRule', (ruleId: string) => this.activateRule(ruleId)),
             vscode.commands.registerCommand('solidrules.deactivateRule', (ruleId: string) => this.deactivateRule(ruleId)),
             vscode.commands.registerCommand('solidrules.toggleRule', (ruleId: string) => this.toggleRule(ruleId)),
+            vscode.commands.registerCommand('solidrules.bulkToggle', () => this.showBulkToggleMenu()),
             vscode.commands.registerCommand('solidrules.deleteRule', (ruleId: string) => this.deleteRule(ruleId)),
             vscode.commands.registerCommand('solidrules.previewRule', (ruleId: string) => this.previewRule(ruleId)),
             vscode.commands.registerCommand('solidrules.addToFavorites', (ruleId: string) => this.addToFavorites(ruleId)),
@@ -164,43 +165,76 @@ export class CommandManager {
 
     private async toggleRule(ruleId: string): Promise<void> {
         try {
-            const rule = await this.rulesManager.getRuleById(ruleId);
-            if (!rule) {
-                console.error('Rule not found:', ruleId);
+            // Use ultra-fast toggle for immediate response
+            await this.rulesManager.ultraFastToggleRule(ruleId);
+        } catch (error) {
+            console.error('Failed to toggle rule:', error);
+            // Fallback to notification on error
+            vscode.window.showErrorMessage(`Failed to toggle rule: ${error}`);
+        }
+    }
+
+    // Enhanced bulk operations for better performance
+    private async bulkToggleRules(ruleIds: string[]): Promise<void> {
+        try {
+            if (ruleIds.length === 0) return;
+            
+            // Show progress for bulk operations
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `Toggling ${ruleIds.length} rules...`,
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ increment: 0 });
+                
+                // Use batch toggle for maximum performance
+                await this.rulesManager.batchToggleRules(ruleIds);
+                
+                progress.report({ increment: 100 });
+            });
+            
+            vscode.window.showInformationMessage(`Successfully toggled ${ruleIds.length} rules`);
+        } catch (error) {
+            console.error('Failed to bulk toggle rules:', error);
+            vscode.window.showErrorMessage(`Failed to toggle rules: ${error}`);
+        }
+    }
+
+    // Show menu for bulk toggle operations
+    private async showBulkToggleMenu(): Promise<void> {
+        try {
+            const rules = await this.rulesManager.getAllRules();
+            if (rules.length === 0) {
+                vscode.window.showInformationMessage('No rules available');
                 return;
             }
 
-            // Ultra-fast toggle: only update database state, no file operations
-            if (rule.isActive) {
-                await this.rulesManager.fastDeactivateRule(ruleId);
-            } else {
-                await this.rulesManager.fastActivateRule(ruleId);
-            }
+            const quickPickItems = rules.map(rule => ({
+                label: rule.name,
+                description: `${rule.category} • ${rule.technologies.join(', ')} • ${rule.isActive ? '✓ Active' : 'Inactive'}`,
+                detail: rule.description,
+                picked: false, // Default selection
+                rule: rule
+            }));
 
-            // Schedule a lazy workspace sync (non-blocking)
-            this.scheduleLazyWorkspaceSync();
+            const selected = await vscode.window.showQuickPick(quickPickItems, {
+                placeHolder: 'Select rules to toggle (multiple selection)',
+                canPickMany: true,
+                matchOnDescription: true,
+                matchOnDetail: true
+            });
+
+            if (selected && selected.length > 0) {
+                const ruleIds = selected.map(item => item.rule.id);
+                await this.bulkToggleRules(ruleIds);
+            }
         } catch (error) {
-            console.error('Failed to toggle rule:', error);
+            console.error('Failed to show bulk toggle menu:', error);
+            vscode.window.showErrorMessage(`Failed to show bulk toggle menu: ${error}`);
         }
     }
 
-    private workspaceSyncTimeout: NodeJS.Timeout | undefined;
 
-    private scheduleLazyWorkspaceSync(): void {
-        // Clear existing timeout
-        if (this.workspaceSyncTimeout) {
-            clearTimeout(this.workspaceSyncTimeout);
-        }
-
-        // Schedule sync after 1 second of inactivity
-        this.workspaceSyncTimeout = setTimeout(async () => {
-            try {
-                await this.rulesManager.syncWorkspaceFiles();
-            } catch (error) {
-                console.error('Lazy workspace sync failed:', error);
-            }
-        }, 1000);
-    }
 
     private async deleteRule(ruleIdOrTreeItem?: string | any): Promise<void> {
         try {
@@ -631,8 +665,5 @@ export class CommandManager {
 
     dispose(): void {
         this.disposables.forEach(d => d.dispose());
-        if (this.workspaceSyncTimeout) {
-            clearTimeout(this.workspaceSyncTimeout);
-        }
     }
 } 

@@ -6,6 +6,21 @@ import { CursorRule, WorkspaceRuleConfig } from '../types';
 export class WorkspaceManager {
     private readonly CURSOR_RULES_FILE = '.cursorrules'; // Legacy support
     private readonly PROJECT_RULES_DIR = '.cursor/rules';
+    
+    // Performance optimization: cache for avoiding unnecessary file operations
+    private lastSyncedRules = new Map<string, string>(); // ruleId -> content hash
+    private readonly SYNC_CACHE_SIZE = 100; // Limit cache size
+
+    // Performance: Cache content hashes to avoid unnecessary writes
+    private generateContentHash(content: string): string {
+        let hash = 0;
+        for (let i = 0; i < content.length; i++) {
+            const char = content.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return hash.toString(36);
+    }
 
     getCurrentWorkspaceId(): string | null {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -478,6 +493,195 @@ Source: ${rule.isCustom ? 'Custom' : 'awesome-cursorrules'}
             };
         } catch {
             return { totalProjectRules: 0, projectRulesDirectoryExists: false };
+        }
+    }
+
+    // Optimized sync with change detection
+    async syncActiveRulesOptimized(activeRules: CursorRule[], config: WorkspaceRuleConfig): Promise<void> {
+        const startTime = Date.now();
+        
+        try {
+            // 1. Detect changes to avoid unnecessary operations
+            const changedRules: CursorRule[] = [];
+            const unchangedCount = activeRules.length;
+            
+            for (const rule of activeRules) {
+                const content = this.formatProjectRuleContent(rule);
+                const currentHash = this.generateContentHash(content);
+                const lastHash = this.lastSyncedRules.get(rule.id);
+                
+                if (lastHash !== currentHash) {
+                    changedRules.push(rule);
+                    this.lastSyncedRules.set(rule.id, currentHash);
+                }
+            }
+
+            // 2. Cleanup cache to prevent memory bloat
+            if (this.lastSyncedRules.size > this.SYNC_CACHE_SIZE) {
+                const entries = Array.from(this.lastSyncedRules.entries());
+                const toKeep = entries.slice(-this.SYNC_CACHE_SIZE);
+                this.lastSyncedRules.clear();
+                toKeep.forEach(([id, hash]) => this.lastSyncedRules.set(id, hash));
+            }
+
+            // 3. Only process changed rules
+            if (changedRules.length === 0) {
+                console.log(`⚡ Sync skipped - no changes detected (${unchangedCount} rules)`);
+                return;
+            }
+
+            // 4. Parallel directory creation (only if needed)
+            await this.createProjectRulesDirectory();
+
+            // 5. Parallel file operations for changed rules only
+            const writePromises = changedRules.map(rule => this.writeProjectRuleOptimized(rule));
+            await Promise.all(writePromises);
+
+            // 6. Legacy support (only if needed and requested)
+            if (config.maintainLegacyFormat) {
+                await Promise.all([
+                    this.createCursorRulesDirectory(config.rulesDirectory),
+                    this.generateMasterCursorRulesFileOptimized(activeRules)
+                ]);
+            }
+
+            const duration = Date.now() - startTime;
+            console.log(`🚀 Optimized sync completed in ${duration}ms - ${changedRules.length}/${unchangedCount} rules updated`);
+            
+        } catch (error) {
+            console.error('❌ Failed to sync active rules optimized:', error);
+            throw error;
+        }
+    }
+
+    // Optimized write with error handling and atomic operations
+    private async writeProjectRuleOptimized(rule: CursorRule): Promise<void> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) return;
+
+        try {
+            const rulesPath = path.join(workspaceId, this.PROJECT_RULES_DIR);
+            const fileName = `${this.sanitizeFileName(rule.name)}.mdc`;
+            const filePath = path.join(rulesPath, fileName);
+            const content = this.formatProjectRuleContent(rule);
+
+            // Atomic write operation
+            const tempPath = `${filePath}.tmp`;
+            await fs.writeFile(tempPath, content, 'utf-8');
+            await fs.rename(tempPath, filePath);
+            
+        } catch (error) {
+            console.error(`Failed to write optimized project rule ${rule.name}:`, error);
+            throw error;
+        }
+    }
+
+    // Optimized master file generation with smart content management
+    private async generateMasterCursorRulesFileOptimized(activeRules: CursorRule[]): Promise<void> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) return;
+
+        try {
+            const masterFilePath = path.join(workspaceId, this.CURSOR_RULES_FILE);
+            const content = this.generateMasterRulesContent(activeRules);
+            
+            // Check if content has changed
+            const contentHash = this.generateContentHash(content);
+            const lastMasterHash = this.lastSyncedRules.get('__MASTER__');
+            
+            if (lastMasterHash === contentHash) {
+                console.log('⚡ Master file unchanged - skipping write');
+                return;
+            }
+
+            // Atomic write for master file
+            const tempPath = `${masterFilePath}.tmp`;
+            await fs.writeFile(tempPath, content, 'utf-8');
+            await fs.rename(tempPath, masterFilePath);
+            
+            this.lastSyncedRules.set('__MASTER__', contentHash);
+            console.log('📝 Master .cursorrules file updated');
+            
+        } catch (error) {
+            console.error('Failed to generate optimized master cursor rules file:', error);
+            throw error;
+        }
+    }
+
+    // Parallel bulk cleanup for better performance
+    async bulkCleanupRules(ruleIds: string[], rulesDirectory: string = 'cursorRules'): Promise<void> {
+        const startTime = Date.now();
+        
+        try {
+            const rules = await Promise.all(
+                ruleIds.map(async (id) => {
+                    // Use a more efficient method to get rule metadata
+                    return { id, name: `rule-${id}` }; // Simplified for cleanup
+                })
+            );
+
+            // Parallel cleanup operations
+            const cleanupPromises = rules.map(async (rule) => {
+                try {
+                    await Promise.all([
+                        this.removeProjectRuleOptimized(rule.id),
+                        this.removeRuleFromWorkspaceOptimized(rule.name, rulesDirectory)
+                    ]);
+                } catch (error) {
+                    console.error(`Failed to cleanup rule ${rule.id}:`, error);
+                    // Continue with other rules
+                }
+            });
+
+            await Promise.all(cleanupPromises);
+            
+            const duration = Date.now() - startTime;
+            console.log(`🧹 Bulk cleanup completed in ${duration}ms - ${rules.length} rules`);
+            
+        } catch (error) {
+            console.error('Failed to bulk cleanup rules:', error);
+            throw error;
+        }
+    }
+
+    // Optimized removal methods
+    private async removeProjectRuleOptimized(ruleId: string): Promise<void> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) return;
+
+        try {
+            const rulesPath = path.join(workspaceId, this.PROJECT_RULES_DIR);
+            const files = await fs.readdir(rulesPath).catch(() => []);
+            
+            // Find and remove the rule file
+            const ruleFile = files.find(file => file.includes(ruleId) && file.endsWith('.mdc'));
+            if (ruleFile) {
+                await fs.unlink(path.join(rulesPath, ruleFile));
+            }
+            
+            // Remove from cache
+            this.lastSyncedRules.delete(ruleId);
+            
+        } catch (error) {
+            console.error(`Failed to remove optimized project rule ${ruleId}:`, error);
+        }
+    }
+
+    private async removeRuleFromWorkspaceOptimized(ruleName: string, rulesDirectory: string): Promise<void> {
+        const workspaceId = this.getCurrentWorkspaceId();
+        if (!workspaceId) return;
+
+        try {
+            const rulesPath = path.join(workspaceId, rulesDirectory);
+            const fileName = `${this.sanitizeFileName(ruleName)}.cursorrules`;
+            const filePath = path.join(rulesPath, fileName);
+            
+            await fs.unlink(filePath).catch(() => {
+                // File might not exist, ignore error
+            });
+            
+        } catch (error) {
+            console.error(`Failed to remove optimized workspace rule ${ruleName}:`, error);
         }
     }
 } 

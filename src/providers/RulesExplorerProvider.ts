@@ -125,11 +125,9 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
             console.log(`📋 Found ${categoryRules.length} rules in category ${category}`);
 
             return categoryRules.map(rule => {
-                // Create label with visual indicator for active rules
-                const displayName = rule.isActive ? `✓ ${rule.name}` : rule.name;
-                const description = rule.isActive ? 
-                    `${this.getRuleDescription(rule)} • ACTIVE` : 
-                    this.getRuleDescription(rule);
+                // Simple display name without redundant visual indicators
+                const displayName = rule.name;
+                const description = this.getRuleDescription(rule);
 
                 const treeItem = new RuleTreeItem(
                     displayName,
@@ -140,7 +138,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     rule
                 );
 
-                // Set icon based on rule status
+                // Set icon based on rule status - this is the main visual indicator
                 if (rule.isFavorite) {
                     treeItem.iconPath = new vscode.ThemeIcon('heart-filled');
                 } else if (rule.isActive) {
