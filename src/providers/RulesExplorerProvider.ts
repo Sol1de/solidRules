@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { RulesManager } from '../managers/RulesManager';
-import { CursorRule, SearchFilters } from '../types';
+import { CursorRule, SearchFilters, BaseRuleTreeItem } from '../types';
 
 export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<RuleTreeItem | undefined | void> = new vscode.EventEmitter<RuleTreeItem | undefined | void>();
@@ -10,13 +10,14 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     private currentFilters: SearchFilters = { sortBy: 'recent' };
 
     constructor(private rulesManager: RulesManager) {
-        // Listen to rules changes
+        // Listen to rules changes with immediate refresh for better responsiveness
         this.rulesManager.onDidChangeRules(() => {
             this.refresh();
         });
     }
 
     refresh(): void {
+        // Immediate refresh for better responsiveness during rapid clicks
         this._onDidChangeTreeData.fire();
     }
 
@@ -124,32 +125,41 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
             console.log(`📋 Found ${categoryRules.length} rules in category ${category}`);
 
             return categoryRules.map(rule => {
+                // Simple display name without redundant visual indicators
+                const displayName = rule.name;
+                const description = this.getRuleDescription(rule);
+
                 const treeItem = new RuleTreeItem(
-                    rule.name,
+                    displayName,
                     vscode.TreeItemCollapsibleState.None,
                     rule.isActive ? 'rule-active' : 'rule-inactive',
-                    this.getRuleDescription(rule),
+                    description,
                     undefined,
                     rule
                 );
 
-                // Set icon based on rule status
+                // Set icon based on rule status - this is the main visual indicator
                 if (rule.isFavorite) {
                     treeItem.iconPath = new vscode.ThemeIcon('heart-filled');
                 } else if (rule.isActive) {
-                    treeItem.iconPath = new vscode.ThemeIcon('check');
+                    treeItem.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
                 } else if (rule.isCustom) {
                     treeItem.iconPath = new vscode.ThemeIcon('edit');
                 } else {
                     treeItem.iconPath = new vscode.ThemeIcon('file-text');
                 }
 
-                // Add command for double-click
+                // Add command for single click - toggle rule activation
                 treeItem.command = {
-                    command: 'solidrules.previewRule',
-                    title: 'Preview Rule',
+                    command: 'solidrules.toggleRule',
+                    title: 'Toggle Rule',
                     arguments: [rule.id]
                 };
+
+                // Add visual styling for active rules using resourceUri
+                if (rule.isActive) {
+                    treeItem.resourceUri = vscode.Uri.parse(`rule-active:${rule.id}`);
+                }
 
                 return treeItem;
             });
@@ -207,48 +217,9 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     }
 }
 
-export class RuleTreeItem extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly contextValue: string,
-        description?: string | boolean,
-        public readonly category?: string,
-        public readonly rule?: CursorRule
-    ) {
-        super(label, collapsibleState);
-        
-        this.tooltip = this.getTooltip();
-        if (description !== undefined) {
-            this.description = description;
-        }
-    }
-
-    private getTooltip(): string {
-        if (this.rule) {
-            const lines = [
-                `**${this.rule.name}**`,
-                '',
-                this.rule.description || 'No description available',
-                '',
-                `**Category:** ${this.rule.category}`,
-                `**Technologies:** ${this.rule.technologies.join(', ') || 'None'}`,
-                `**Tags:** ${this.rule.tags.join(', ') || 'None'}`,
-                `**Status:** ${this.rule.isActive ? 'Active' : 'Inactive'}`,
-                `**Favorite:** ${this.rule.isFavorite ? 'Yes' : 'No'}`,
-                `**Type:** ${this.rule.isCustom ? 'Custom' : 'GitHub'}`,
-                '',
-                `**Created:** ${this.rule.createdAt.toLocaleDateString()}`,
-                `**Last Updated:** ${this.rule.lastUpdated?.toLocaleDateString() || 'Never'}`
-            ];
-            return lines.join('\n');
-        }
-
-        if (this.category) {
-            return `Category: ${this.category}\n${this.description || ''}`;
-        }
-
-        return this.label;
+export class RuleTreeItem extends BaseRuleTreeItem {
+    protected getTooltipPrefix(): string {
+        return '';
     }
 
     iconPath = new vscode.ThemeIcon('file-text');

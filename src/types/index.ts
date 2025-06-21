@@ -1,3 +1,5 @@
+import * as vscode from 'vscode';
+
 export interface CursorRule {
     id: string;
     name: string;
@@ -51,11 +53,12 @@ export interface WorkspaceRuleConfig {
     activeRules: string[];
     rulesDirectory: string;
     lastSyncDate?: Date | undefined;
+    maintainLegacyFormat?: boolean; // Whether to maintain .cursorrules format alongside new format
 }
 
 export interface SearchFilters {
-    technology?: string;
-    category?: string;
+    technology?: string | undefined;
+    category?: string | undefined;
     tags?: string[];
     sortBy: 'recent' | 'alphabetical' | 'popularity';
     showFavoritesOnly?: boolean;
@@ -86,4 +89,63 @@ export interface DatabaseSchema {
         ruleId: string;
         addedAt: Date;
     };
+}
+
+// Base TreeItem class for code reuse
+export abstract class BaseRuleTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly label: string,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+        public readonly contextValue: string,
+        description?: string | boolean,
+        public readonly category?: string,
+        public readonly rule?: CursorRule
+    ) {
+        super(label, collapsibleState);
+        
+        this.tooltip = this.getTooltip();
+        if (description !== undefined) {
+            this.description = description;
+        }
+    }
+
+    protected abstract getTooltipPrefix(): string;
+    protected getTooltipSuffix(): string {
+        return '';
+    }
+
+    private getTooltip(): string {
+        if (this.rule) {
+            const lines = [
+                `**${this.rule.name}** ${this.getTooltipPrefix()}`,
+                '',
+                this.rule.description || 'No description available',
+                '',
+                `**Category:** ${this.rule.category}`,
+                `**Technologies:** ${this.rule.technologies.join(', ') || 'None'}`,
+                `**Tags:** ${this.rule.tags.join(', ') || 'None'}`,
+                `**Status:** ${this.rule.isActive ? 'Active' : 'Inactive'}`,
+                `**Favorite:** ${this.rule.isFavorite ? 'Yes' : 'No'}`,
+                `**Type:** ${this.rule.isCustom ? 'Custom' : 'GitHub'}`,
+                '',
+                `**Created:** ${this.rule.createdAt.toLocaleDateString()}`,
+                `**Last Updated:** ${this.rule.lastUpdated?.toLocaleDateString() || 'Never'}`
+            ];
+            
+            const suffix = this.getTooltipSuffix();
+            if (suffix) {
+                lines.push('', suffix);
+            }
+            
+            return lines.join('\n');
+        }
+
+        if (this.category) {
+            return `Category: ${this.category}\n${this.description || ''}`;
+        }
+
+        return this.label;
+    }
+
+    iconPath = new vscode.ThemeIcon('file-text');
 } 

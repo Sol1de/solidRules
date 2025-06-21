@@ -1,19 +1,20 @@
 import * as vscode from 'vscode';
 import { RulesManager } from '../managers/RulesManager';
-import { CursorRule } from '../types';
+import { CursorRule, BaseRuleTreeItem } from '../types';
 
 export class ActiveRulesProvider implements vscode.TreeDataProvider<ActiveRuleTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<ActiveRuleTreeItem | undefined | void> = new vscode.EventEmitter<ActiveRuleTreeItem | undefined | void>();
     readonly onDidChangeTreeData: vscode.Event<ActiveRuleTreeItem | undefined | void> = this._onDidChangeTreeData.event;
 
     constructor(private rulesManager: RulesManager) {
-        // Listen to rules changes
+        // Listen to rules changes with immediate refresh
         this.rulesManager.onDidChangeRules(() => {
             this.refresh();
         });
     }
 
     refresh(): void {
+        // Immediate refresh for better responsiveness
         this._onDidChangeTreeData.fire();
     }
 
@@ -53,6 +54,7 @@ export class ActiveRulesProvider implements vscode.TreeDataProvider<ActiveRuleTr
                     vscode.TreeItemCollapsibleState.None,
                     'rule-active',
                     this.getRuleDescription(rule),
+                    undefined,
                     rule
                 );
 
@@ -65,12 +67,15 @@ export class ActiveRulesProvider implements vscode.TreeDataProvider<ActiveRuleTr
                     treeItem.iconPath = new vscode.ThemeIcon('check');
                 }
 
-                // Add command for double-click
+                // Add command for single click - toggle rule deactivation
                 treeItem.command = {
-                    command: 'solidrules.previewRule',
-                    title: 'Preview Rule',
+                    command: 'solidrules.toggleRule',
+                    title: 'Toggle Rule',
                     arguments: [rule.id]
                 };
+
+                // Add visual styling for active rules
+                treeItem.resourceUri = vscode.Uri.parse(`rule-active:${rule.id}`);
 
                 return treeItem;
             });
@@ -105,43 +110,13 @@ export class ActiveRulesProvider implements vscode.TreeDataProvider<ActiveRuleTr
     }
 }
 
-export class ActiveRuleTreeItem extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly contextValue: string,
-        description?: string | boolean,
-        public readonly rule?: CursorRule
-    ) {
-        super(label, collapsibleState);
-        
-        this.tooltip = this.getTooltip();
-        if (description !== undefined) {
-            this.description = description;
-        }
+export class ActiveRuleTreeItem extends BaseRuleTreeItem {
+    protected getTooltipPrefix(): string {
+        return '(Active)';
     }
 
-    private getTooltip(): string {
-        if (this.rule) {
-            const lines = [
-                `**${this.rule.name}** (Active)`,
-                '',
-                this.rule.description || 'No description available',
-                '',
-                `**Category:** ${this.rule.category}`,
-                `**Technologies:** ${this.rule.technologies.join(', ') || 'None'}`,
-                `**Tags:** ${this.rule.tags.join(', ') || 'None'}`,
-                `**Type:** ${this.rule.isCustom ? 'Custom' : 'GitHub'}`,
-                '',
-                `**Created:** ${this.rule.createdAt.toLocaleDateString()}`,
-                `**Last Updated:** ${this.rule.lastUpdated?.toLocaleDateString() || 'Never'}`,
-                '',
-                'Right-click to deactivate this rule'
-            ];
-            return lines.join('\n');
-        }
-
-        return this.label;
+    protected getTooltipSuffix(): string {
+        return 'Right-click to deactivate this rule';
     }
 
     iconPath = new vscode.ThemeIcon('check');

@@ -10,12 +10,209 @@ export class RulesManager {
     private _onDidChangeRules = new vscode.EventEmitter<void>();
     public readonly onDidChangeRules = this._onDidChangeRules.event;
 
+    // Performance optimization: batching and debouncing
+    private workspaceSyncTimeout: NodeJS.Timeout | undefined;
+    private uiRefreshTimeout: NodeJS.Timeout | undefined;
+    private pendingFileOperations = new Set<string>();
+    private readonly WORKSPACE_SYNC_DELAY = 2000; // 2 seconds debounce
+    private readonly UI_REFRESH_DELAY = 100; // 100ms UI debounce
+
     constructor(
         private databaseManager: DatabaseManager,
         private githubService: GitHubService,
         private notificationManager: NotificationManager,
         private workspaceManager: WorkspaceManager
     ) {}
+
+    // Optimized immediate UI refresh with debouncing
+    private scheduleUIRefresh(): void {
+        if (this.uiRefreshTimeout) {
+            clearTimeout(this.uiRefreshTimeout);
+        }
+
+        this.uiRefreshTimeout = setTimeout(() => {
+            this._onDidChangeRules.fire();
+        }, this.UI_REFRESH_DELAY);
+    }
+
+    // Enhanced workspace sync with intelligent batching
+    private scheduleWorkspaceSync(): void {
+        if (this.workspaceSyncTimeout) {
+            clearTimeout(this.workspaceSyncTimeout);
+        }
+
+        this.workspaceSyncTimeout = setTimeout(async () => {
+            try {
+                if (this.pendingFileOperations.size > 0) {
+                    console.log(`📦 Batch syncing ${this.pendingFileOperations.size} file operations...`);
+                    await this.optimizedWorkspaceSync();
+                    this.pendingFileOperations.clear();
+                }
+            } catch (error) {
+                console.error('Batched workspace sync failed:', error);
+            }
+        }, this.WORKSPACE_SYNC_DELAY);
+    }
+
+    // Ultra-optimized workspace sync with parallel operations
+    private async optimizedWorkspaceSync(): Promise<void> {
+        const startTime = Date.now();
+        
+        try {
+            const activeRules = await this.databaseManager.getActiveRules();
+            const workspaceId = this.workspaceManager.getCurrentWorkspaceId();
+            
+            if (!workspaceId) {
+                console.log('⚠️ No workspace open - skipping sync');
+                return;
+            }
+
+            // Parallel operations for better performance
+            await Promise.all([
+                this.cleanupInactiveRulesOptimized(activeRules),
+                this.writeActiveRulesOptimized(activeRules)
+            ]);
+            
+            const duration = Date.now() - startTime;
+            console.log(`🚀 Optimized workspace sync completed in ${duration}ms - ${activeRules.length} active rules`);
+            
+        } catch (error) {
+            console.error('❌ Optimized workspace sync failed:', error);
+            throw error;
+        }
+    }
+
+    // Optimized cleanup with selective deletion
+    private async cleanupInactiveRulesOptimized(activeRules: CursorRule[]): Promise<void> {
+        const workspaceId = this.workspaceManager.getCurrentWorkspaceId();
+        if (!workspaceId) return;
+
+        try {
+            const activeRuleIds = new Set(activeRules.map(r => r.id));
+            const config = vscode.workspace.getConfiguration('solidrules');
+            const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+            
+            // Only process rules that have pending file operations
+            const rulesToCleanup = Array.from(this.pendingFileOperations)
+                .filter(ruleId => !activeRuleIds.has(ruleId));
+
+            if (rulesToCleanup.length === 0) return;
+
+            // Parallel cleanup operations
+            const cleanupPromises = rulesToCleanup.map(async (ruleId) => {
+                const rule = await this.databaseManager.getRuleById(ruleId);
+                if (rule) {
+                    await Promise.all([
+                        this.workspaceManager.removeProjectRule(rule),
+                        this.workspaceManager.removeRuleFromWorkspace(rule, rulesDirectory)
+                    ]);
+                }
+            });
+
+            await Promise.all(cleanupPromises);
+            console.log(`🧹 Cleaned up ${rulesToCleanup.length} inactive rules`);
+            
+        } catch (error) {
+            console.error('Failed to cleanup inactive rules:', error);
+        }
+    }
+
+    // Optimized write with batch operations
+    private async writeActiveRulesOptimized(activeRules: CursorRule[]): Promise<void> {
+        const workspaceId = this.workspaceManager.getCurrentWorkspaceId();
+        if (!workspaceId || activeRules.length === 0) return;
+
+        try {
+            const config = vscode.workspace.getConfiguration('solidrules');
+            const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+            const maintainLegacyFormat = config.get<boolean>('maintainLegacyFormat', false);
+
+            const workspaceConfig: WorkspaceRuleConfig = {
+                workspaceId,
+                activeRules: activeRules.map(r => r.id),
+                rulesDirectory,
+                lastSyncDate: new Date(),
+                maintainLegacyFormat
+            };
+
+            // Parallel operations for maximum speed with change detection
+            await Promise.all([
+                this.databaseManager.saveWorkspaceConfig(workspaceConfig),
+                this.workspaceManager.syncActiveRulesOptimized(activeRules, workspaceConfig)
+            ]);
+            
+            console.log(`📝 Optimized write completed - ${activeRules.length} active rules`);
+            
+        } catch (error) {
+            console.error('Failed to write active rules optimized:', error);
+        }
+    }
+
+    // Ultra-fast rule toggle with immediate feedback
+    async ultraFastToggleRule(ruleId: string): Promise<void> {
+        try {
+            const rule = await this.databaseManager.getRuleById(ruleId);
+            if (!rule) {
+                console.error('Rule not found:', ruleId);
+                return;
+            }
+
+            // 1. Immediate database update (fastest operation)
+            const newStatus = !rule.isActive;
+            await this.databaseManager.updateRuleStatus(ruleId, newStatus);
+            rule.isActive = newStatus;
+
+            // 2. Immediate UI feedback (perceived performance)
+            this.scheduleUIRefresh();
+
+            // 3. Schedule file operations for later (non-blocking)
+            this.pendingFileOperations.add(ruleId);
+            this.scheduleWorkspaceSync();
+
+            console.log(`⚡ Ultra-fast toggle: ${rule.name} -> ${newStatus ? 'ACTIVE' : 'INACTIVE'}`);
+            
+        } catch (error) {
+            console.error(`Failed to ultra-fast toggle rule ${ruleId}:`, error);
+            throw error;
+        }
+    }
+
+    // Batch toggle for multiple rules (even faster for multiple operations)
+    async batchToggleRules(ruleIds: string[]): Promise<void> {
+        const startTime = Date.now();
+        
+        try {
+            // 1. Batch database operations
+            const rules = await Promise.all(
+                ruleIds.map(id => this.databaseManager.getRuleById(id))
+            );
+
+            const validRules = rules.filter(r => r !== null) as CursorRule[];
+            
+            // 2. Parallel status updates
+            await Promise.all(
+                validRules.map(rule => {
+                    const newStatus = !rule.isActive;
+                    rule.isActive = newStatus;
+                    this.pendingFileOperations.add(rule.id);
+                    return this.databaseManager.updateRuleStatus(rule.id, newStatus);
+                })
+            );
+
+            // 3. Single UI refresh for all changes
+            this.scheduleUIRefresh();
+            
+            // 4. Single workspace sync for all changes
+            this.scheduleWorkspaceSync();
+
+            const duration = Date.now() - startTime;
+            console.log(`🚀 Batch toggle completed in ${duration}ms - ${validRules.length} rules`);
+            
+        } catch (error) {
+            console.error('Failed to batch toggle rules:', error);
+            throw error;
+        }
+    }
 
     async initializeRules(): Promise<void> {
         try {
@@ -37,8 +234,6 @@ export class RulesManager {
             // Don't throw error on initialization to prevent extension from failing to load
         }
     }
-
-
 
     async refreshRules(): Promise<void> {
         try {
@@ -158,7 +353,7 @@ export class RulesManager {
                         const batch = rulesToUpdate.slice(i, i + BATCH_SIZE);
                         
                                             // Process batch in parallel - fetch rules first, then batch save
-                    const batchPromises = batch.map(async (githubRule, index) => {
+                    const batchPromises = batch.map(async (githubRule) => {
                         const maxRetries = 3;
                         let attempt = 0;
                         
@@ -375,7 +570,7 @@ export class RulesManager {
         return categories.sort();
     }
 
-    async activateRule(ruleId: string): Promise<void> {
+    async activateRule(ruleId: string, showNotification: boolean = true, skipWorkspaceUpdate: boolean = false): Promise<void> {
         try {
             const rule = await this.databaseManager.getRuleById(ruleId);
             if (!rule) {
@@ -385,18 +580,27 @@ export class RulesManager {
             await this.databaseManager.updateRuleStatus(ruleId, true);
             rule.isActive = true;
 
-            await this.updateWorkspaceRules();
-            await this.notificationManager.showRuleActivatedNotification(rule.name);
+            // Skip workspace update for batch operations to improve performance
+            if (!skipWorkspaceUpdate) {
+                await this.updateWorkspaceRules();
+            }
             
+            if (showNotification) {
+                await this.notificationManager.showRuleActivatedNotification(rule.name);
+            }
+            
+            // Immediate UI update without debouncing for better responsiveness
             this._onDidChangeRules.fire();
         } catch (error) {
             console.error(`Failed to activate rule ${ruleId}:`, error);
-            await this.notificationManager.showErrorMessage(`Failed to activate rule: ${error}`);
+            if (showNotification) {
+                await this.notificationManager.showErrorMessage(`Failed to activate rule: ${error}`);
+            }
             throw error;
         }
     }
 
-    async deactivateRule(ruleId: string): Promise<void> {
+    async deactivateRule(ruleId: string, showNotification: boolean = true, skipWorkspaceUpdate: boolean = false): Promise<void> {
         try {
             const rule = await this.databaseManager.getRuleById(ruleId);
             if (!rule) {
@@ -406,13 +610,29 @@ export class RulesManager {
             await this.databaseManager.updateRuleStatus(ruleId, false);
             rule.isActive = false;
 
-            await this.updateWorkspaceRules();
-            await this.notificationManager.showRuleDeactivatedNotification(rule.name);
+            // Skip workspace file operations for batch operations to improve performance
+            if (!skipWorkspaceUpdate) {
+                // Remove the rule files from workspace
+                const config = vscode.workspace.getConfiguration('solidrules');
+                const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+                
+                await this.workspaceManager.removeProjectRule(rule);
+                await this.workspaceManager.removeRuleFromWorkspace(rule, rulesDirectory);
+
+                await this.updateWorkspaceRules();
+            }
             
+            if (showNotification) {
+                await this.notificationManager.showRuleDeactivatedNotification(rule.name);
+            }
+            
+            // Immediate UI update without debouncing for better responsiveness
             this._onDidChangeRules.fire();
         } catch (error) {
             console.error(`Failed to deactivate rule ${ruleId}:`, error);
-            await this.notificationManager.showErrorMessage(`Failed to deactivate rule: ${error}`);
+            if (showNotification) {
+                await this.notificationManager.showErrorMessage(`Failed to deactivate rule: ${error}`);
+            }
             throw error;
         }
     }
@@ -479,6 +699,15 @@ export class RulesManager {
             const confirmed = await this.notificationManager.confirmDeleteRule(rule.name);
             if (!confirmed) {
                 return;
+            }
+
+            // Remove rule files from workspace if active
+            if (rule.isActive) {
+                const config = vscode.workspace.getConfiguration('solidrules');
+                const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+                
+                await this.workspaceManager.removeProjectRule(rule);
+                await this.workspaceManager.removeRuleFromWorkspace(rule, rulesDirectory);
             }
 
             await this.databaseManager.deleteRule(ruleId);
@@ -595,12 +824,14 @@ export class RulesManager {
             const activeRules = await this.databaseManager.getActiveRules();
             const config = vscode.workspace.getConfiguration('solidrules');
             const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+            const maintainLegacyFormat = config.get<boolean>('maintainLegacyFormat', false);
 
             const workspaceConfig: WorkspaceRuleConfig = {
                 workspaceId,
                 activeRules: activeRules.map(r => r.id),
                 rulesDirectory,
-                lastSyncDate: new Date()
+                lastSyncDate: new Date(),
+                maintainLegacyFormat
             };
 
             await this.databaseManager.saveWorkspaceConfig(workspaceConfig);
@@ -608,6 +839,123 @@ export class RulesManager {
             
         } catch (error) {
             console.error('Failed to update workspace rules:', error);
+        }
+    }
+
+    async batchUpdateWorkspace(): Promise<void> {
+        console.log('🔄 Batch updating workspace...');
+        await this.updateWorkspaceRules();
+        console.log('✅ Workspace batch update completed');
+    }
+
+    // Ultra-fast methods that only update database state
+    async fastActivateRule(ruleId: string): Promise<void> {
+        try {
+            const rule = await this.databaseManager.getRuleById(ruleId);
+            if (!rule) {
+                throw new Error('Rule not found');
+            }
+
+            // Only update database state - no file operations
+            await this.databaseManager.updateRuleStatus(ruleId, true);
+            rule.isActive = true;
+            
+            // Immediate UI refresh only
+            this._onDidChangeRules.fire();
+        } catch (error) {
+            console.error(`Failed to fast activate rule ${ruleId}:`, error);
+            throw error;
+        }
+    }
+
+    async fastDeactivateRule(ruleId: string): Promise<void> {
+        try {
+            const rule = await this.databaseManager.getRuleById(ruleId);
+            if (!rule) {
+                throw new Error('Rule not found');
+            }
+
+            // Only update database state - no file operations
+            await this.databaseManager.updateRuleStatus(ruleId, false);
+            rule.isActive = false;
+            
+            // Immediate UI refresh only
+            this._onDidChangeRules.fire();
+        } catch (error) {
+            console.error(`Failed to fast deactivate rule ${ruleId}:`, error);
+            throw error;
+        }
+    }
+
+    // Lazy workspace synchronization method
+    async syncWorkspaceFiles(): Promise<void> {
+        try {
+            const activeRules = await this.databaseManager.getActiveRules();
+            
+            // Clean up all existing rule files first
+            await this.cleanupAllRuleFiles();
+            
+            // Only write files for currently active rules
+            if (activeRules.length > 0) {
+                await this.writeActiveRulesToWorkspace(activeRules);
+            }
+            
+            console.log(`📁 Synchronized ${activeRules.length} active rules to workspace`);
+        } catch (error) {
+            console.error('Failed to sync workspace files:', error);
+            throw error;
+        }
+    }
+
+    private async cleanupAllRuleFiles(): Promise<void> {
+        const workspaceId = this.workspaceManager.getCurrentWorkspaceId();
+        if (!workspaceId) {
+            return;
+        }
+
+        try {
+            // Get all rules to clean up their files
+            const allRules = await this.databaseManager.getAllRules();
+            const config = vscode.workspace.getConfiguration('solidrules');
+            const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+            
+            // Remove all rule files (both active and inactive)
+            for (const rule of allRules) {
+                await this.workspaceManager.removeProjectRule(rule);
+                await this.workspaceManager.removeRuleFromWorkspace(rule, rulesDirectory);
+            }
+            
+            console.log(`🧹 Cleaned up ${allRules.length} rule files from workspace`);
+        } catch (error) {
+            console.error('Failed to cleanup rule files:', error);
+        }
+    }
+
+    private async writeActiveRulesToWorkspace(activeRules: CursorRule[]): Promise<void> {
+        const workspaceId = this.workspaceManager.getCurrentWorkspaceId();
+        if (!workspaceId) {
+            return;
+        }
+
+        try {
+            const config = vscode.workspace.getConfiguration('solidrules');
+            const rulesDirectory = config.get<string>('rulesDirectory', 'cursorRules');
+            const maintainLegacyFormat = config.get<boolean>('maintainLegacyFormat', false);
+
+            const workspaceConfig: WorkspaceRuleConfig = {
+                workspaceId,
+                activeRules: activeRules.map(r => r.id),
+                rulesDirectory,
+                lastSyncDate: new Date(),
+                maintainLegacyFormat
+            };
+
+            await this.databaseManager.saveWorkspaceConfig(workspaceConfig);
+            await this.workspaceManager.syncActiveRules(activeRules, workspaceConfig);
+            
+            console.log(`📝 Wrote ${activeRules.length} active rules to workspace`);
+        } catch (error) {
+            console.error('Failed to write active rules to workspace:', error);
         }
     }
 
@@ -690,6 +1038,18 @@ export class RulesManager {
     }
 
     dispose(): void {
+        // Clean up timeouts
+        if (this.workspaceSyncTimeout) {
+            clearTimeout(this.workspaceSyncTimeout);
+        }
+        if (this.uiRefreshTimeout) {
+            clearTimeout(this.uiRefreshTimeout);
+        }
+        
+        // Clear cache
+        this.pendingFileOperations.clear();
+        
+        // Dispose event emitter
         this._onDidChangeRules.dispose();
     }
 } 

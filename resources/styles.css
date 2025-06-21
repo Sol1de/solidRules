@@ -1,0 +1,41 @@
+/* SolidRules Extension Styles */
+
+/* Active rule styling */
+.monaco-list .monaco-list-row[data-uri*="rule-active"] {
+    background-color: var(--vscode-solidrules-activeRule-background, rgba(30, 70, 32, 0.3)) !important;
+    border-left: 3px solid var(--vscode-charts-green, #4caf50) !important;
+    margin: 1px 0 !important;
+    border-radius: 3px !important;
+}
+
+.monaco-list .monaco-list-row[data-uri*="rule-active"]:hover {
+    background-color: var(--vscode-solidrules-activeRule-background, rgba(30, 70, 32, 0.5)) !important;
+}
+
+/* Light theme specific */
+.vs .monaco-list .monaco-list-row[data-uri*="rule-active"] {
+    background-color: rgba(232, 245, 232, 0.6) !important;
+    border-left: 3px solid #4caf50 !important;
+}
+
+.vs .monaco-list .monaco-list-row[data-uri*="rule-active"]:hover {
+    background-color: rgba(232, 245, 232, 0.8) !important;
+}
+
+/* Dark theme specific */
+.vs-dark .monaco-list .monaco-list-row[data-uri*="rule-active"] {
+    background-color: rgba(30, 70, 32, 0.4) !important;
+    border-left: 3px solid #66bb6a !important;
+}
+
+.vs-dark .monaco-list .monaco-list-row[data-uri*="rule-active"]:hover {
+    background-color: rgba(30, 70, 32, 0.6) !important;
+}
+
+/* High contrast theme */
+.hc-black .monaco-list .monaco-list-row[data-uri*="rule-active"],
+.hc-light .monaco-list .monaco-list-row[data-uri*="rule-active"] {
+    background-color: rgba(30, 70, 32, 0.5) !important;
+    border-left: 4px solid #4caf50 !important;
+    border: 1px solid #4caf50 !important;
+} 
