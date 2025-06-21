@@ -1,24 +1,19 @@
 import * as vscode from 'vscode';
 import { RulesManager } from './RulesManager';
 import { RulesExplorerProvider } from '../providers/RulesExplorerProvider';
-import { ActiveRulesProvider } from '../providers/ActiveRulesProvider';
-import { FavoritesProvider } from '../providers/FavoritesProvider';
-import { Technology } from '../types';
 
 export class CommandManager {
     private disposables: vscode.Disposable[] = [];
 
     constructor(
         private rulesManager: RulesManager,
-        private rulesExplorerProvider: RulesExplorerProvider,
-        private activeRulesProvider: ActiveRulesProvider,
-        private favoritesProvider: FavoritesProvider
+        private rulesExplorerProvider: RulesExplorerProvider
     ) {}
 
     registerCommands(context: vscode.ExtensionContext): void {
         // Register all commands
         this.disposables.push(
-                        vscode.commands.registerCommand('solidrules.refreshRules', () => this.refreshRules()),
+            vscode.commands.registerCommand('solidrules.refreshRules', () => this.refreshRules()),
             vscode.commands.registerCommand('solidrules.searchRules', () => this.searchRules()),
             vscode.commands.registerCommand('solidrules.activateRule', (ruleId: string) => this.activateRule(ruleId)),
             vscode.commands.registerCommand('solidrules.deactivateRule', (ruleId: string) => this.deactivateRule(ruleId)),
@@ -55,8 +50,6 @@ export class CommandManager {
         }
     }
 
-
-
     private async searchRules(): Promise<void> {
         try {
             const currentQuery = this.rulesExplorerProvider.getSearchQuery();
@@ -81,7 +74,7 @@ export class CommandManager {
             // Handle different argument types
             if (typeof ruleIdOrTreeItem === 'string') {
                 ruleId = ruleIdOrTreeItem;
-            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+            } else if (ruleIdOrTreeItem?.rule?.id) {
                 // TreeItem passed from context menu
                 ruleId = ruleIdOrTreeItem.rule.id;
             }
@@ -129,7 +122,7 @@ export class CommandManager {
             // Handle different argument types
             if (typeof ruleIdOrTreeItem === 'string') {
                 ruleId = ruleIdOrTreeItem;
-            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+            } else if (ruleIdOrTreeItem?.rule?.id) {
                 // TreeItem passed from context menu
                 ruleId = ruleIdOrTreeItem.rule.id;
             }
@@ -199,17 +192,14 @@ export class CommandManager {
             clearTimeout(this.workspaceSyncTimeout);
         }
 
-        // Schedule workspace sync after 2 seconds of inactivity (lazy sync)
+        // Schedule sync after 1 second of inactivity
         this.workspaceSyncTimeout = setTimeout(async () => {
             try {
-                console.log('🔄 Lazy workspace sync starting...');
                 await this.rulesManager.syncWorkspaceFiles();
-                console.log('✅ Lazy workspace sync completed');
-                this.workspaceSyncTimeout = undefined;
             } catch (error) {
-                console.error('Failed to sync workspace:', error);
+                console.error('Lazy workspace sync failed:', error);
             }
-        }, 2000); // 2 seconds delay for true lazy loading
+        }, 1000);
     }
 
     private async deleteRule(ruleIdOrTreeItem?: string | any): Promise<void> {
@@ -219,7 +209,7 @@ export class CommandManager {
             // Handle different argument types
             if (typeof ruleIdOrTreeItem === 'string') {
                 ruleId = ruleIdOrTreeItem;
-            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+            } else if (ruleIdOrTreeItem?.rule?.id) {
                 // TreeItem passed from context menu
                 ruleId = ruleIdOrTreeItem.rule.id;
             }
@@ -227,21 +217,22 @@ export class CommandManager {
             if (!ruleId) {
                 // Show quick pick to select rule
                 const rules = await this.rulesManager.getAllRules();
+                const customRules = rules.filter(r => r.isCustom);
                 
-                if (rules.length === 0) {
-                    vscode.window.showInformationMessage('No rules available to delete');
+                if (customRules.length === 0) {
+                    vscode.window.showInformationMessage('No custom rules to delete');
                     return;
                 }
 
-                const quickPickItems = rules.map(rule => ({
+                const quickPickItems = customRules.map(rule => ({
                     label: rule.name,
-                    description: `${rule.category} • ${rule.technologies.join(', ')} ${rule.isCustom ? '(Custom)' : ''}`,
+                    description: `${rule.category} • ${rule.technologies.join(', ')}`,
                     detail: rule.description,
                     rule
                 }));
 
                 const selected = await vscode.window.showQuickPick(quickPickItems, {
-                    placeHolder: 'Select a rule to delete permanently',
+                    placeHolder: 'Select a custom rule to delete',
                     matchOnDescription: true,
                     matchOnDetail: true
                 });
@@ -252,7 +243,26 @@ export class CommandManager {
             }
 
             if (ruleId) {
-                await this.rulesManager.deleteRule(ruleId);
+                const rule = await this.rulesManager.getRuleById(ruleId);
+                if (!rule) {
+                    vscode.window.showErrorMessage('Rule not found');
+                    return;
+                }
+
+                if (!rule.isCustom) {
+                    vscode.window.showErrorMessage('Only custom rules can be deleted');
+                    return;
+                }
+
+                const confirmation = await vscode.window.showWarningMessage(
+                    `Are you sure you want to delete the rule "${rule.name}"?`,
+                    'Delete',
+                    'Cancel'
+                );
+
+                if (confirmation === 'Delete') {
+                    await this.rulesManager.deleteRule(ruleId);
+                }
             }
         } catch (error) {
             console.error('Failed to delete rule:', error);
@@ -266,7 +276,7 @@ export class CommandManager {
             // Handle different argument types
             if (typeof ruleIdOrTreeItem === 'string') {
                 ruleId = ruleIdOrTreeItem;
-            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
+            } else if (ruleIdOrTreeItem?.rule?.id) {
                 // TreeItem passed from context menu
                 ruleId = ruleIdOrTreeItem.rule.id;
             }
@@ -277,7 +287,7 @@ export class CommandManager {
                 
                 const quickPickItems = rules.map(rule => ({
                     label: rule.name,
-                    description: `${rule.category} • ${rule.technologies.join(', ')}`,
+                    description: `${rule.category} • ${rule.technologies.join(', ')} • ${rule.isActive ? 'Active' : 'Inactive'}`,
                     detail: rule.description,
                     rule
                 }));
@@ -303,50 +313,44 @@ export class CommandManager {
 
     private async addToFavorites(ruleIdOrTreeItem: string | any): Promise<void> {
         try {
-            let ruleId: string;
+            let ruleId: string | undefined;
             
-            // Handle different argument types
             if (typeof ruleIdOrTreeItem === 'string') {
                 ruleId = ruleIdOrTreeItem;
-            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
-                // TreeItem passed from context menu
+            } else if (ruleIdOrTreeItem?.rule?.id) {
                 ruleId = ruleIdOrTreeItem.rule.id;
-            } else {
-                console.error('Invalid ruleId provided to addToFavorites');
-                return;
             }
-            
-            await this.rulesManager.toggleRuleFavorite(ruleId);
+
+            if (ruleId) {
+                await this.rulesManager.toggleRuleFavorite(ruleId);
+            }
         } catch (error) {
-            console.error('Failed to add to favorites:', error);
+            console.error('Failed to add rule to favorites:', error);
         }
     }
 
     private async removeFromFavorites(ruleIdOrTreeItem: string | any): Promise<void> {
         try {
-            let ruleId: string;
+            let ruleId: string | undefined;
             
-            // Handle different argument types
             if (typeof ruleIdOrTreeItem === 'string') {
                 ruleId = ruleIdOrTreeItem;
-            } else if (ruleIdOrTreeItem && ruleIdOrTreeItem.rule && ruleIdOrTreeItem.rule.id) {
-                // TreeItem passed from context menu
+            } else if (ruleIdOrTreeItem?.rule?.id) {
                 ruleId = ruleIdOrTreeItem.rule.id;
-            } else {
-                console.error('Invalid ruleId provided to removeFromFavorites');
-                return;
             }
-            
-            await this.rulesManager.toggleRuleFavorite(ruleId);
+
+            if (ruleId) {
+                await this.rulesManager.toggleRuleFavorite(ruleId);
+            }
         } catch (error) {
-            console.error('Failed to remove from favorites:', error);
+            console.error('Failed to remove rule from favorites:', error);
         }
     }
 
     private async importCustomRule(): Promise<void> {
         try {
             const name = await vscode.window.showInputBox({
-                prompt: 'Enter a name for your custom rule',
+                prompt: 'Enter rule name',
                 placeHolder: 'My Custom Rule'
             });
 
@@ -354,88 +358,59 @@ export class CommandManager {
                 return;
             }
 
-            const uri = await vscode.window.showOpenDialog({
-                canSelectFiles: true,
-                canSelectMany: false,
-                filters: {
-                    'CursorRules Files': ['cursorrules'],
-                    'Text Files': ['txt'],
-                    'All Files': ['*']
-                },
-                title: 'Select CursorRules file to import'
+            const content = await vscode.window.showInputBox({
+                prompt: 'Enter rule content',
+                placeHolder: 'You are an expert developer...'
             });
 
-            if (!uri || uri.length === 0) {
+            if (!content) {
                 return;
             }
 
-            const document = await vscode.workspace.openTextDocument(uri[0]);
-            const content = document.getText();
-
-            if (!content.trim()) {
-                vscode.window.showErrorMessage('The selected file is empty');
-                return;
-            }
-
-            // Ask for technologies
             const technologiesInput = await vscode.window.showInputBox({
                 prompt: 'Enter technologies (comma-separated)',
-                placeHolder: 'react, typescript, tailwind'
+                placeHolder: 'React, TypeScript, Node.js'
             });
 
-            const technologies = technologiesInput 
-                ? technologiesInput.split(',').map(t => t.trim()).filter(Boolean)
-                : [];
+            const technologies = technologiesInput ? 
+                technologiesInput.split(',').map(t => t.trim()).filter(t => t) : 
+                [];
 
-            // Ask for tags
-            const tagsInput = await vscode.window.showInputBox({
-                prompt: 'Enter tags (comma-separated)',
-                placeHolder: 'frontend, styling, component'
-            });
-
-            const tags = tagsInput 
-                ? tagsInput.split(',').map(t => t.trim()).filter(Boolean)
-                : [];
-
-            await this.rulesManager.importCustomRule(name, content, technologies, tags);
-
+            await this.rulesManager.importCustomRule(name, content, technologies);
         } catch (error) {
             console.error('Failed to import custom rule:', error);
-            vscode.window.showErrorMessage(`Failed to import custom rule: ${error}`);
         }
     }
 
     private async exportRules(): Promise<void> {
         try {
-            const options = [
-                'Export All Rules',
-                'Export Active Rules',
-                'Export Favorite Rules'
+            const exportOptions = [
+                { label: 'Export All Rules', value: 'all' },
+                { label: 'Export Active Rules', value: 'active' },
+                { label: 'Export Favorite Rules', value: 'favorites' }
             ];
 
-            const selected = await vscode.window.showQuickPick(options, {
-                placeholder: 'What would you like to export?'
+            const selected = await vscode.window.showQuickPick(exportOptions, {
+                placeHolder: 'Select export option'
             });
 
             if (!selected) {
                 return;
             }
 
-            let ruleIds: string[] | undefined;
-            
-            switch (selected) {
-                case 'Export Active Rules':
-                    const activeRules = await this.rulesManager.getActiveRules();
-                    ruleIds = activeRules.map(r => r.id);
+            switch (selected.value) {
+                case 'all':
+                    await this.rulesManager.exportRules();
                     break;
-                case 'Export Favorite Rules':
+                case 'active':
+                    const activeRules = await this.rulesManager.getActiveRules();
+                    await this.rulesManager.exportRules(activeRules.map(r => r.id));
+                    break;
+                case 'favorites':
                     const favoriteRules = await this.rulesManager.getFavoriteRules();
-                    ruleIds = favoriteRules.map(r => r.id);
+                    await this.rulesManager.exportRules(favoriteRules.map(r => r.id));
                     break;
             }
-
-            await this.rulesManager.exportRules(ruleIds);
-
         } catch (error) {
             console.error('Failed to export rules:', error);
         }
@@ -467,18 +442,18 @@ export class CommandManager {
 
     private async syncWorkspace(): Promise<void> {
         try {
-            vscode.window.showInformationMessage('Synchronizing workspace files...');
             await this.rulesManager.syncWorkspaceFiles();
-            vscode.window.showInformationMessage('Workspace synchronized successfully!');
+            vscode.window.showInformationMessage('Workspace files synced successfully');
         } catch (error) {
             console.error('Failed to sync workspace:', error);
-            vscode.window.showErrorMessage(`Failed to sync workspace: ${error}`);
+            vscode.window.showErrorMessage('Failed to sync workspace files');
         }
     }
 
     private async clearFilters(): Promise<void> {
         try {
             await this.rulesExplorerProvider.clearFilters();
+            vscode.window.showInformationMessage('Filters cleared');
         } catch (error) {
             console.error('Failed to clear filters:', error);
         }
@@ -486,28 +461,23 @@ export class CommandManager {
 
     private async filterByTechnology(): Promise<void> {
         try {
-            const rules = await this.rulesManager.getAllRules();
-            const technologies = new Set<string>();
-            
-            rules.forEach(rule => {
-                rule.technologies.forEach(tech => technologies.add(tech));
+            const technologies = await this.rulesManager.getTechnologies();
+            const sortedTechs = technologies
+                .sort((a, b) => b.count - a.count)
+                .map(t => ({ label: `${t.name} (${t.count})`, value: t.name }));
+
+            const options = [
+                { label: 'All Technologies', value: 'all' },
+                ...sortedTechs
+            ];
+
+            const selected = await vscode.window.showQuickPick(options, {
+                placeHolder: 'Filter by technology'
             });
 
-            const sortedTechs = Array.from(technologies).sort();
-            
-            if (sortedTechs.length === 0) {
-                vscode.window.showInformationMessage('No technologies found');
-                return;
-            }
-
-            const selected = await vscode.window.showQuickPick(
-                ['All Technologies', ...sortedTechs],
-                { placeholder: 'Filter by technology' }
-            );
-
             if (selected) {
-                const technology = selected === 'All Technologies' ? undefined : selected;
-                await this.rulesExplorerProvider.applyFilters({ technology });
+                const technology = selected.value === 'all' ? undefined : selected.value;
+                await this.rulesExplorerProvider.applyFilters({ technology, sortBy: 'recent' });
             }
         } catch (error) {
             console.error('Failed to filter by technology:', error);
@@ -516,22 +486,20 @@ export class CommandManager {
 
     private async filterByCategory(): Promise<void> {
         try {
-            const rules = await this.rulesManager.getAllRules();
-            const categories = [...new Set(rules.map(r => r.category))].sort();
+            const categories = await this.rulesManager.getCategories();
             
-            if (categories.length === 0) {
-                vscode.window.showInformationMessage('No categories found');
-                return;
-            }
+            const options = [
+                { label: 'All Categories', value: 'all' },
+                ...categories.map(cat => ({ label: cat, value: cat }))
+            ];
 
-            const selected = await vscode.window.showQuickPick(
-                ['All Categories', ...categories],
-                { placeholder: 'Filter by category' }
-            );
+            const selected = await vscode.window.showQuickPick(options, {
+                placeHolder: 'Filter by category'
+            });
 
             if (selected) {
-                const category = selected === 'All Categories' ? undefined : selected;
-                await this.rulesExplorerProvider.applyFilters({ category });
+                const category = selected.value === 'all' ? undefined : selected.value;
+                await this.rulesExplorerProvider.applyFilters({ category, sortBy: 'recent' });
             }
         } catch (error) {
             console.error('Failed to filter by category:', error);
@@ -541,17 +509,17 @@ export class CommandManager {
     private async sortRules(): Promise<void> {
         try {
             const options = [
-                { label: 'Most Recent', value: 'recent' as const },
-                { label: 'Alphabetical', value: 'alphabetical' as const },
-                { label: 'Most Popular', value: 'popularity' as const }
+                { label: 'Most Recent', value: 'recent' },
+                { label: 'Alphabetical', value: 'alphabetical' },
+                { label: 'Popularity', value: 'popularity' }
             ];
 
             const selected = await vscode.window.showQuickPick(options, {
-                placeholder: 'Sort rules by...'
+                placeHolder: 'Sort rules by...'
             });
 
             if (selected) {
-                await this.rulesExplorerProvider.applyFilters({ sortBy: selected.value });
+                await this.rulesExplorerProvider.applyFilters({ sortBy: selected.value as 'recent' | 'alphabetical' | 'popularity' });
             }
         } catch (error) {
             console.error('Failed to sort rules:', error);
@@ -561,165 +529,110 @@ export class CommandManager {
     private async configureGitHubToken(): Promise<void> {
         try {
             const token = await vscode.window.showInputBox({
-                prompt: 'Entrez votre token GitHub personnel',
-                placeHolder: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+                prompt: 'Enter your GitHub Personal Access Token',
+                placeHolder: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
                 password: true,
-                ignoreFocusOut: true,
-                validateInput: (value) => {
-                    if (!value || value.trim().length === 0) {
-                        return 'Le token ne peut pas être vide';
-                    }
-                    if (!value.startsWith('ghp_') && !value.startsWith('github_pat_')) {
-                        return 'Le token doit commencer par "ghp_" ou "github_pat_"';
-                    }
-                    return null;
-                }
+                ignoreFocusOut: true
             });
 
             if (token) {
-                await this.saveGitHubToken(token.trim());
-                vscode.window.showInformationMessage('Token GitHub configuré avec succès !');
-                // Refresh the tree view
-                vscode.commands.executeCommand('solidrules.refreshRules');
+                await this.saveGitHubToken(token);
+                vscode.window.showInformationMessage('GitHub token configured successfully!');
+                
+                // Set context to show other panels
+                vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
+                
+                // Refresh rules after token setup
+                await this.rulesManager.refreshRules();
             }
         } catch (error) {
             console.error('Failed to configure GitHub token:', error);
-            vscode.window.showErrorMessage('Erreur lors de la configuration du token GitHub');
+            vscode.window.showErrorMessage('Failed to save GitHub token');
         }
     }
 
     private async saveGitHubToken(token: string): Promise<void> {
         const config = vscode.workspace.getConfiguration('solidrules');
         await config.update('githubToken', token, vscode.ConfigurationTarget.Global);
-        
-        // Set context to show other panels
-        vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
-        
-        // Refresh GitHub service
-        const githubService = (this.rulesManager as any).githubService;
-        if (githubService && typeof githubService.refreshToken === 'function') {
-            githubService.refreshToken();
-        }
     }
 
     private async resetGitHubToken(): Promise<void> {
         try {
-            const confirm = await vscode.window.showWarningMessage(
-                'Êtes-vous sûr de vouloir supprimer votre token GitHub ? Cela supprimera le token et vous ramènera à l\'écran de configuration.',
-                'Supprimer le token',
-                'Annuler'
+            const confirmation = await vscode.window.showWarningMessage(
+                'Are you sure you want to reset your GitHub token? This will limit you to 60 requests per hour instead of 5000.',
+                'Reset Token',
+                'Cancel'
             );
-            
-            if (confirm === 'Supprimer le token') {
+
+            if (confirmation === 'Reset Token') {
                 const config = vscode.workspace.getConfiguration('solidrules');
-                await config.update('githubToken', '', vscode.ConfigurationTarget.Global);
-                await config.update('tokenSetupCompleted', false, vscode.ConfigurationTarget.Global);
+                await config.update('githubToken', undefined, vscode.ConfigurationTarget.Global);
                 
-                // Set context to show token setup panel
+                // Set context to hide other panels and show token setup
                 vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', false);
                 
-                // Refresh GitHub service to use no token
-                const githubService = (this.rulesManager as any).githubService;
-                if (githubService && typeof githubService.refreshToken === 'function') {
-                    githubService.refreshToken();
-                }
-                
-                // Refresh tree views
-                this.rulesExplorerProvider.refresh();
-                this.activeRulesProvider.refresh();
-                this.favoritesProvider.refresh();
-                
-                vscode.window.showInformationMessage('Token GitHub supprimé. Vous pouvez maintenant configurer un nouveau token.');
+                vscode.window.showInformationMessage('GitHub token has been reset');
             }
         } catch (error) {
             console.error('Failed to reset GitHub token:', error);
-            vscode.window.showErrorMessage('Erreur lors de la suppression du token GitHub');
+            vscode.window.showErrorMessage('Failed to reset GitHub token');
         }
     }
 
     private async clearDatabase(): Promise<void> {
         try {
-            const confirm = await vscode.window.showWarningMessage(
-                '⚠️ ATTENTION : Cette action supprimera TOUTES les données de SolidRules !\n\n' +
-                'Cela inclut :\n' +
-                '• Toutes les règles téléchargées\n' +
-                '• Vos favoris\n' +
-                '• Les configurations de workspace\n' +
-                '• L\'historique des mises à jour\n\n' +
-                'Cette action est IRRÉVERSIBLE !',
-                'Supprimer toutes les données',
-                'Annuler'
+            const confirmation = await vscode.window.showWarningMessage(
+                'Are you sure you want to clear all rules and data? This action cannot be undone.',
+                { modal: true },
+                'Clear Database',
+                'Cancel'
             );
-            
-            if (confirm === 'Supprimer toutes les données') {
-                // Double confirmation for such a destructive action
-                const doubleConfirm = await vscode.window.showWarningMessage(
-                    '🚨 CONFIRMATION FINALE\n\n' +
-                    'Êtes-vous ABSOLUMENT sûr de vouloir supprimer toutes les données ?\n' +
-                    'Cette action ne peut pas être annulée !',
-                    'OUI, supprimer tout',
-                    'Non, annuler'
-                );
-                
-                if (doubleConfirm === 'OUI, supprimer tout') {
-                    await vscode.window.withProgress({
-                        location: vscode.ProgressLocation.Notification,
-                        title: 'Suppression des données...',
-                        cancellable: false
-                    }, async (progress) => {
-                        progress.report({ message: 'Vidage de la base de données...' });
-                        
-                        await this.rulesManager.clearAllData();
-                        
-                        progress.report({ message: 'Actualisation des vues...' });
-                        
-                        // Refresh all tree views
-                        this.rulesExplorerProvider.refresh();
-                        this.activeRulesProvider.refresh();
-                        this.favoritesProvider.refresh();
-                    });
-                    
-                    vscode.window.showInformationMessage(
-                        '✅ Base de données vidée avec succès !\n\n' +
-                        'Utilisez "Refresh Rules" pour recharger les données depuis GitHub.'
-                    );
+
+            if (confirmation === 'Clear Database') {
+                const userInput = await vscode.window.showInputBox({
+                    prompt: 'Type "CLEAR" to confirm database deletion',
+                    placeHolder: 'CLEAR'
+                });
+
+                if (userInput === 'CLEAR') {
+                    await this.rulesManager.clearAllData();
+                    vscode.window.showInformationMessage('Database cleared successfully');
+                } else {
+                    vscode.window.showInformationMessage('Database clear cancelled');
                 }
             }
         } catch (error) {
             console.error('Failed to clear database:', error);
-            vscode.window.showErrorMessage(`Erreur lors du vidage de la base de données: ${error}`);
+            vscode.window.showErrorMessage('Failed to clear database');
         }
     }
 
     private async skipTokenSetup(): Promise<void> {
         try {
-            const config = vscode.workspace.getConfiguration('solidrules');
-            
-            // Mark setup as completed without setting a token
-            await config.update('tokenSetupCompleted', true, vscode.ConfigurationTarget.Global);
-            
-            // Show warning about limitations
-            await vscode.window.showWarningMessage(
-                'Configuration du token GitHub ignorée. Vous serez limité à 60 requêtes/heure.\n\n' +
-                'Vous pourrez configurer un token plus tard depuis les paramètres de l\'extension ou en cliquant sur l\'icône clé.',
-                'OK'
+            const confirmation = await vscode.window.showWarningMessage(
+                'Without a GitHub token, you\'ll be limited to 60 requests per hour. You can configure a token later for 5000 requests per hour.',
+                'Continue Without Token',
+                'Setup Token'
             );
-            
-            // Refresh the tree view to show rules
-            this.rulesExplorerProvider.refresh();
-            this.activeRulesProvider.refresh();
-            this.favoritesProvider.refresh();
-            
-            vscode.window.showInformationMessage('Vous pouvez maintenant utiliser SolidRules avec un débit limité (60 requêtes/heure).');
-            
+
+            if (confirmation === 'Continue Without Token') {
+                // Set context to show other panels
+                vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
+                
+                // Refresh rules with rate limit
+                await this.rulesManager.refreshRules();
+            } else if (confirmation === 'Setup Token') {
+                await this.configureGitHubToken();
+            }
         } catch (error) {
             console.error('Failed to skip token setup:', error);
-            vscode.window.showErrorMessage(`Failed to skip setup: ${error}`);
         }
     }
 
     dispose(): void {
         this.disposables.forEach(d => d.dispose());
-        this.disposables = [];
+        if (this.workspaceSyncTimeout) {
+            clearTimeout(this.workspaceSyncTimeout);
+        }
     }
 } 

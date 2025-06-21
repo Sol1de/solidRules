@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs/promises';
 import { CursorRule, WorkspaceRuleConfig, UpdateInfo } from '../types';
 
 export class DatabaseManager {
@@ -8,12 +6,8 @@ export class DatabaseManager {
     private workspacesStorageKey = 'solidrules.workspaces';
     private updatesStorageKey = 'solidrules.updates';
     private favoritesStorageKey = 'solidrules.favorites';
-    
-    private dbPath: string;
 
-    constructor(private context: vscode.ExtensionContext) {
-        this.dbPath = path.join(context.globalStorageUri.fsPath, 'solidrules-data.json');
-    }
+    constructor(private context: vscode.ExtensionContext) {}
 
     async initialize(): Promise<void> {
         try {
@@ -207,20 +201,13 @@ export class DatabaseManager {
 
     async saveWorkspaceConfig(config: WorkspaceRuleConfig): Promise<void> {
         try {
-            const workspaces = this.context.globalState.get<any[]>(this.workspacesStorageKey, []);
+            const workspaces = this.context.globalState.get<WorkspaceRuleConfig[]>(this.workspacesStorageKey, []);
             const existingIndex = workspaces.findIndex(w => w.workspaceId === config.workspaceId);
             
-            const serializedConfig = {
-                workspaceId: config.workspaceId,
-                activeRules: config.activeRules,
-                rulesDirectory: config.rulesDirectory,
-                lastSyncDate: config.lastSyncDate?.toISOString()
-            };
-            
             if (existingIndex >= 0) {
-                workspaces[existingIndex] = serializedConfig;
+                workspaces[existingIndex] = config;
             } else {
-                workspaces.push(serializedConfig);
+                workspaces.push(config);
             }
             
             await this.context.globalState.update(this.workspacesStorageKey, workspaces);
@@ -233,16 +220,19 @@ export class DatabaseManager {
     async getWorkspaceConfig(workspaceId: string): Promise<WorkspaceRuleConfig | null> {
         try {
             const workspaces = this.context.globalState.get<any[]>(this.workspacesStorageKey, []);
-            const workspace = workspaces.find(w => w.workspaceId === workspaceId);
+            const workspaceData = workspaces.find(w => w.workspaceId === workspaceId);
             
-            if (!workspace) return null;
+            if (workspaceData) {
+                return {
+                    workspaceId: workspaceData.workspaceId,
+                    activeRules: workspaceData.activeRules || [],
+                    rulesDirectory: workspaceData.rulesDirectory || 'cursorRules',
+                    lastSyncDate: workspaceData.lastSyncDate ? new Date(workspaceData.lastSyncDate) : undefined,
+                    maintainLegacyFormat: workspaceData.maintainLegacyFormat
+                };
+            }
             
-            return {
-                workspaceId: workspace.workspaceId,
-                activeRules: workspace.activeRules || [],
-                rulesDirectory: workspace.rulesDirectory,
-                lastSyncDate: workspace.lastSyncDate ? new Date(workspace.lastSyncDate) : undefined
-            };
+            return null;
         } catch (error) {
             console.error('Failed to get workspace config:', error);
             return null;
@@ -255,11 +245,7 @@ export class DatabaseManager {
             const existingIndex = updates.findIndex(u => u.ruleId === updateInfo.ruleId);
             
             const serializedUpdate = {
-                ruleId: updateInfo.ruleId,
-                ruleName: updateInfo.ruleName,
-                hasUpdate: updateInfo.hasUpdate,
-                currentVersion: updateInfo.currentVersion,
-                latestVersion: updateInfo.latestVersion,
+                ...updateInfo,
                 lastChecked: updateInfo.lastChecked.toISOString()
             };
             
@@ -279,16 +265,10 @@ export class DatabaseManager {
     async getUpdatesInfo(): Promise<UpdateInfo[]> {
         try {
             const updates = this.context.globalState.get<any[]>(this.updatesStorageKey, []);
-            return updates
-                .filter(u => u.hasUpdate)
-                .map(u => ({
-                    ruleId: u.ruleId,
-                    ruleName: u.ruleName,
-                    hasUpdate: u.hasUpdate,
-                    currentVersion: u.currentVersion,
-                    latestVersion: u.latestVersion,
-                    lastChecked: new Date(u.lastChecked)
-                }));
+            return updates.map(update => ({
+                ...update,
+                lastChecked: new Date(update.lastChecked)
+            }));
         } catch (error) {
             console.error('Failed to get updates info:', error);
             return [];
@@ -297,47 +277,47 @@ export class DatabaseManager {
 
     private deserializeRule(data: any): CursorRule {
         return {
-            id: data.id,
-            name: data.name,
-            description: data.description,
-            content: data.content,
+            ...data,
+            createdAt: new Date(data.createdAt),
+            lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : undefined,
             technologies: data.technologies || [],
             tags: data.tags || [],
-            category: data.category,
-            isActive: data.isActive || false,
-            isFavorite: data.isFavorite || false,
-            isCustom: data.isCustom || false,
-            githubPath: data.githubPath,
-            lastUpdated: data.lastUpdated ? new Date(data.lastUpdated) : undefined,
-            createdAt: new Date(data.createdAt),
-            version: data.version
+            isActive: Boolean(data.isActive),
+            isFavorite: Boolean(data.isFavorite),
+            isCustom: Boolean(data.isCustom)
         };
     }
 
     async searchRules(query: string, filters?: { technology?: string; category?: string }): Promise<CursorRule[]> {
         try {
-            const rules = await this.getAllRules();
+            let rules = await this.getAllRules();
             
-            let filteredRules = rules.filter(rule => {
-                const searchText = `${rule.name} ${rule.description} ${rule.content}`.toLowerCase();
-                return searchText.includes(query.toLowerCase());
-            });
-
+            // Apply text search
+            if (query.trim()) {
+                const searchTerm = query.toLowerCase().trim();
+                rules = rules.filter(rule => 
+                    rule.name.toLowerCase().includes(searchTerm) ||
+                    rule.description.toLowerCase().includes(searchTerm) ||
+                    rule.content.toLowerCase().includes(searchTerm) ||
+                    rule.technologies.some(tech => tech.toLowerCase().includes(searchTerm)) ||
+                    rule.tags.some(tag => tag.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            // Apply filters
             if (filters?.technology) {
-                filteredRules = filteredRules.filter(rule =>
-                    rule.technologies.some(tech =>
+                rules = rules.filter(rule => 
+                    rule.technologies.some(tech => 
                         tech.toLowerCase().includes(filters.technology!.toLowerCase())
                     )
                 );
             }
-
+            
             if (filters?.category) {
-                filteredRules = filteredRules.filter(rule => rule.category === filters.category);
+                rules = rules.filter(rule => rule.category === filters.category);
             }
-
-            return filteredRules.sort((a, b) => 
-                (b.lastUpdated || b.createdAt).getTime() - (a.lastUpdated || a.createdAt).getTime()
-            );
+            
+            return rules;
         } catch (error) {
             console.error('Failed to search rules:', error);
             return [];
@@ -346,25 +326,22 @@ export class DatabaseManager {
 
     async clearAllData(): Promise<void> {
         try {
-            // Clear all stored data
             await this.context.globalState.update(this.rulesStorageKey, []);
             await this.context.globalState.update(this.workspacesStorageKey, []);
             await this.context.globalState.update(this.updatesStorageKey, []);
             await this.context.globalState.update(this.favoritesStorageKey, []);
-            
-            console.log('🗑️ All database data cleared successfully');
+            console.log('All data cleared successfully');
         } catch (error) {
-            console.error('Failed to clear database:', error);
+            console.error('Failed to clear all data:', error);
             throw error;
         }
     }
 
     async close(): Promise<void> {
-        // No cleanup needed for VSCode storage
-        return Promise.resolve();
+        // Nothing to close for VSCode storage
     }
 
     dispose(): void {
-        // No cleanup needed for VSCode storage
+        // Nothing to dispose
     }
 } 

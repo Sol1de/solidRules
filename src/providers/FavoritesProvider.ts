@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { RulesManager } from '../managers/RulesManager';
-import { CursorRule } from '../types';
+import { CursorRule, BaseRuleTreeItem } from '../types';
 
 export class FavoritesProvider implements vscode.TreeDataProvider<FavoriteRuleTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<FavoriteRuleTreeItem | undefined | void> = new vscode.EventEmitter<FavoriteRuleTreeItem | undefined | void>();
@@ -54,6 +54,7 @@ export class FavoritesProvider implements vscode.TreeDataProvider<FavoriteRuleTr
                     vscode.TreeItemCollapsibleState.None,
                     'rule-favorite',
                     this.getRuleDescription(rule),
+                    undefined,
                     rule
                 );
 
@@ -115,44 +116,13 @@ export class FavoritesProvider implements vscode.TreeDataProvider<FavoriteRuleTr
     }
 }
 
-export class FavoriteRuleTreeItem extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly contextValue: string,
-        description?: string | boolean,
-        public readonly rule?: CursorRule
-    ) {
-        super(label, collapsibleState);
-        
-        this.tooltip = this.getTooltip();
-        if (description !== undefined) {
-            this.description = description;
-        }
+export class FavoriteRuleTreeItem extends BaseRuleTreeItem {
+    protected getTooltipPrefix(): string {
+        return '⭐';
     }
 
-    private getTooltip(): string {
-        if (this.rule) {
-            const lines = [
-                `**${this.rule.name}** ⭐`,
-                '',
-                this.rule.description || 'No description available',
-                '',
-                `**Category:** ${this.rule.category}`,
-                `**Technologies:** ${this.rule.technologies.join(', ') || 'None'}`,
-                `**Tags:** ${this.rule.tags.join(', ') || 'None'}`,
-                `**Status:** ${this.rule.isActive ? 'Active' : 'Inactive'}`,
-                `**Type:** ${this.rule.isCustom ? 'Custom' : 'GitHub'}`,
-                '',
-                `**Created:** ${this.rule.createdAt.toLocaleDateString()}`,
-                `**Last Updated:** ${this.rule.lastUpdated?.toLocaleDateString() || 'Never'}`,
-                '',
-                'Right-click to remove from favorites'
-            ];
-            return lines.join('\n');
-        }
-
-        return this.label;
+    protected getTooltipSuffix(): string {
+        return 'Right-click to remove from favorites';
     }
 
     iconPath = new vscode.ThemeIcon('heart');

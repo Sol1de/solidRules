@@ -158,7 +158,7 @@ export class RulesManager {
                         const batch = rulesToUpdate.slice(i, i + BATCH_SIZE);
                         
                                             // Process batch in parallel - fetch rules first, then batch save
-                    const batchPromises = batch.map(async (githubRule, index) => {
+                    const batchPromises = batch.map(async (githubRule) => {
                         const maxRetries = 3;
                         let attempt = 0;
                         
@@ -696,7 +696,6 @@ export class RulesManager {
     async syncWorkspaceFiles(): Promise<void> {
         try {
             const activeRules = await this.databaseManager.getActiveRules();
-            const allRules = await this.databaseManager.getAllRules();
             
             // Clean up all existing rule files first
             await this.cleanupAllRuleFiles();

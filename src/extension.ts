@@ -2,14 +2,13 @@ import * as vscode from 'vscode';
 import { RulesManager } from './managers/RulesManager';
 import { DatabaseManager } from './managers/DatabaseManager';
 import { GitHubService } from './services/GitHubService';
-import { WorkspaceManager } from './managers/WorkspaceManager';
 import { RulesExplorerProvider } from './providers/RulesExplorerProvider';
 import { ActiveRulesProvider } from './providers/ActiveRulesProvider';
 import { FavoritesProvider } from './providers/FavoritesProvider';
 import { TokenSetupViewProvider } from './providers/TokenSetupViewProvider';
 import { CommandManager } from './managers/CommandManager';
 import { NotificationManager } from './managers/NotificationManager';
-import { WorkspaceManager as WorkspaceManagerClass } from './managers/WorkspaceManager';
+import { WorkspaceManager } from './managers/WorkspaceManager';
 import { ActiveRuleDecorator } from './decorators/ActiveRuleDecorator';
 
 let rulesManager: RulesManager;
@@ -21,7 +20,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const databaseManager = new DatabaseManager(context);
         const githubService = new GitHubService();
         const notificationManager = new NotificationManager();
-        const workspaceManager = new WorkspaceManagerClass();
+        const workspaceManager = new WorkspaceManager();
         
         // Initialize rules manager
         rulesManager = new RulesManager(
@@ -64,9 +63,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Initialize command manager
         commandManager = new CommandManager(
             rulesManager,
-            rulesExplorerProvider,
-            activeRulesProvider,
-            favoritesProvider
+            rulesExplorerProvider
         );
         
         // Register all commands

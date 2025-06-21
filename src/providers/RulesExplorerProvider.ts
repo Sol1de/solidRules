@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { RulesManager } from '../managers/RulesManager';
-import { CursorRule, SearchFilters } from '../types';
+import { CursorRule, SearchFilters, BaseRuleTreeItem } from '../types';
 
 export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<RuleTreeItem | undefined | void> = new vscode.EventEmitter<RuleTreeItem | undefined | void>();
@@ -219,48 +219,9 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     }
 }
 
-export class RuleTreeItem extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly contextValue: string,
-        description?: string | boolean,
-        public readonly category?: string,
-        public readonly rule?: CursorRule
-    ) {
-        super(label, collapsibleState);
-        
-        this.tooltip = this.getTooltip();
-        if (description !== undefined) {
-            this.description = description;
-        }
-    }
-
-    private getTooltip(): string {
-        if (this.rule) {
-            const lines = [
-                `**${this.rule.name}**`,
-                '',
-                this.rule.description || 'No description available',
-                '',
-                `**Category:** ${this.rule.category}`,
-                `**Technologies:** ${this.rule.technologies.join(', ') || 'None'}`,
-                `**Tags:** ${this.rule.tags.join(', ') || 'None'}`,
-                `**Status:** ${this.rule.isActive ? 'Active' : 'Inactive'}`,
-                `**Favorite:** ${this.rule.isFavorite ? 'Yes' : 'No'}`,
-                `**Type:** ${this.rule.isCustom ? 'Custom' : 'GitHub'}`,
-                '',
-                `**Created:** ${this.rule.createdAt.toLocaleDateString()}`,
-                `**Last Updated:** ${this.rule.lastUpdated?.toLocaleDateString() || 'Never'}`
-            ];
-            return lines.join('\n');
-        }
-
-        if (this.category) {
-            return `Category: ${this.category}\n${this.description || ''}`;
-        }
-
-        return this.label;
+export class RuleTreeItem extends BaseRuleTreeItem {
+    protected getTooltipPrefix(): string {
+        return '';
     }
 
     iconPath = new vscode.ThemeIcon('file-text');

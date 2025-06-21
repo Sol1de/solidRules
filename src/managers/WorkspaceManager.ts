@@ -141,7 +141,7 @@ export class WorkspaceManager {
         }
     }
 
-    async generateMasterCursorRulesFile(activeRules: CursorRule[], rulesDirectory: string = 'cursorRules'): Promise<void> {
+    async generateMasterCursorRulesFile(activeRules: CursorRule[]): Promise<void> {
         const workspaceId = this.getCurrentWorkspaceId();
         if (!workspaceId) {
             throw new Error('No workspace is currently open');
@@ -420,7 +420,7 @@ Source: ${rule.isCustom ? 'Custom' : 'awesome-cursorrules'}
                 for (const rule of activeRules) {
                     await this.writeRuleToWorkspace(rule, config.rulesDirectory);
                 }
-                await this.generateMasterCursorRulesFile(activeRules, config.rulesDirectory);
+                await this.generateMasterCursorRulesFile(activeRules);
             }
 
         } catch (error) {
