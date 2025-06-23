@@ -6,7 +6,10 @@ export class GitHubService {
     private octokit!: Octokit;
     private readonly REPO_OWNER = 'PatrickJS';
     private readonly REPO_NAME = 'awesome-cursorrules';
-    private readonly RULES_PATH = 'rules';
+    private readonly RULES_PATHS = [
+        { path: 'rules', format: 'directory' },      // Old format: directories with .cursorrules
+        { path: 'rules-new', format: 'file' }       // New format: direct .mdc files
+    ];
 
     constructor() {
         this.initializeOctokit();
@@ -36,40 +39,90 @@ export class GitHubService {
 
     async fetchRulesList(): Promise<GitHubRuleInfo[]> {
         try {
-            console.log(`📡 Fetching rules list from ${this.REPO_OWNER}/${this.REPO_NAME}/${this.RULES_PATH}...`);
+            console.log(`📡 Fetching rules list from ${this.REPO_OWNER}/${this.REPO_NAME}...`);
             
-            const response = await this.octokit.repos.getContent({
-                owner: this.REPO_OWNER,
-                repo: this.REPO_NAME,
-                path: this.RULES_PATH
-            });
+            const allRules: GitHubRuleInfo[] = [];
+            
+            // Parse both rules directories with different formats
+            for (const rulesConfig of this.RULES_PATHS) {
+                try {
+                    console.log(`📁 Processing directory: ${rulesConfig.path} (format: ${rulesConfig.format})`);
+                    
+                    const response = await this.octokit.repos.getContent({
+                        owner: this.REPO_OWNER,
+                        repo: this.REPO_NAME,
+                        path: rulesConfig.path
+                    });
 
-            if (Array.isArray(response.data)) {
-                const allItems = response.data;
-                const directories = allItems.filter(item => item.type === 'dir');
-                
-                console.log(`📊 GitHub API returned ${allItems.length} total items, ${directories.length} directories (rules)`);
-                
-                // Log some examples for debugging
-                if (directories.length > 0) {
-                    console.log(`📁 First few rules: ${directories.slice(0, 5).map(d => d.name).join(', ')}...`);
+                    if (Array.isArray(response.data)) {
+                        const allItems = response.data;
+                        let rules: GitHubRuleInfo[] = [];
+                        
+                        if (rulesConfig.format === 'directory') {
+                            // Old format: filter directories
+                            const directories = allItems.filter(item => item.type === 'dir');
+                            console.log(`📊 Directory ${rulesConfig.path}: ${allItems.length} total items, ${directories.length} rule directories`);
+                            
+                            rules = directories.map(item => ({
+                                path: item.path,
+                                name: item.name,
+                                sha: item.sha,
+                                size: item.size || 0,
+                                download_url: item.download_url || '',
+                                type: item.type as 'file' | 'dir',
+                                format: 'directory'
+                            }));
+                        } else if (rulesConfig.format === 'file') {
+                            // New format: filter .mdc files
+                            const mdcFiles = allItems.filter(item => 
+                                item.type === 'file' && item.name.endsWith('.mdc')
+                            );
+                            console.log(`📊 Directory ${rulesConfig.path}: ${allItems.length} total items, ${mdcFiles.length} .mdc rule files`);
+                            
+                            rules = mdcFiles.map(item => ({
+                                path: item.path,
+                                name: item.name.replace('.mdc', ''), // Remove .mdc extension for display
+                                sha: item.sha,
+                                size: item.size || 0,
+                                download_url: item.download_url || '',
+                                type: item.type as 'file' | 'dir',
+                                format: 'file'
+                            }));
+                        }
+                        
+                        allRules.push(...rules);
+                        console.log(`✅ Successfully parsed ${rules.length} rules from ${rulesConfig.path}`);
+                    } else {
+                        console.warn(`⚠️ Directory ${rulesConfig.path}: GitHub API response is not an array`);
+                    }
+                } catch (error: any) {
+                    // Log error but continue with other directories
+                    if (error.status === 404) {
+                        console.warn(`⚠️ Directory ${rulesConfig.path} not found in repository`);
+                    } else {
+                        console.error(`❌ Error processing directory ${rulesConfig.path}:`, error);
+                    }
                 }
-                
-                const rules = directories.map(item => ({
-                    path: item.path,
-                    name: item.name,
-                    sha: item.sha,
-                    size: item.size || 0,
-                    download_url: item.download_url || '',
-                    type: item.type as 'file' | 'dir'
-                }));
-                
-                console.log(`✅ Successfully parsed ${rules.length} rules`);
-                return rules;
             }
             
-            console.warn('⚠️ GitHub API response is not an array');
-            return [];
+            // Remove duplicates based on rule name (in case same rule exists in both directories)
+            const uniqueRules = allRules.filter((rule, index, self) => 
+                index === self.findIndex(r => r.name === rule.name)
+            );
+            
+            if (uniqueRules.length !== allRules.length) {
+                console.log(`🔄 Removed ${allRules.length - uniqueRules.length} duplicate rules`);
+            }
+            
+            console.log(`✅ Total rules found: ${uniqueRules.length} (from ${this.RULES_PATHS.map(p => p.path).join(', ')})`);
+            
+            // Log some examples for debugging
+            if (uniqueRules.length > 0) {
+                console.log(`📁 Sample rules: ${uniqueRules.slice(0, 5).map(d => d.name).join(', ')}...`);
+            }
+            
+            return uniqueRules;
+            
         } catch (error: any) {
             console.error('❌ Error fetching rules list:', error);
             
@@ -82,17 +135,30 @@ export class GitHubService {
         }
     }
 
-    async fetchRuleContent(rulePath: string): Promise<string> {
+    async fetchRuleContent(rulePath: string, format?: string): Promise<string> {
         try {
-            // Look for .cursorrules file in the rule directory
+            let contentPath: string;
+            
+            // Determine content path based on format
+            if (format === 'file') {
+                // New format: direct .mdc file - path already includes .mdc extension
+                contentPath = rulePath;
+            } else {
+                // Old format: .cursorrules file in directory
+                contentPath = `${rulePath}/.cursorrules`;
+            }
+            
+            console.log(`📄 Fetching content from: ${contentPath} (format: ${format})`);
+            
             const response = await this.octokit.repos.getContent({
                 owner: this.REPO_OWNER,
                 repo: this.REPO_NAME,
-                path: `${rulePath}/.cursorrules`
+                path: contentPath
             });
 
             if (!Array.isArray(response.data) && response.data.type === 'file') {
                 const content = Buffer.from(response.data.content, 'base64').toString('utf-8');
+                console.log(`✅ Successfully fetched content for ${contentPath} (${content.length} chars)`);
                 return content;
             }
             throw new Error('Rule content not found');
@@ -140,7 +206,7 @@ export class GitHubService {
         try {
             // Fetch content and metadata in parallel for better performance
             const [content, { description, technologies }] = await Promise.all([
-                this.fetchRuleContent(ruleInfo.path),
+                this.fetchRuleContent(ruleInfo.path, ruleInfo.format),
                 this.fetchRuleMetadata(ruleInfo.path)
             ]);
             

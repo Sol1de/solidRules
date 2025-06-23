@@ -36,25 +36,94 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
         }
 
         if (!element) {
-            // Root level
-            if (this.currentFilters.sortBy !== 'recent' || this.searchQuery) {
-                return this.getRootItems();
-            }
-            return this.getRootItems();
+            // Root level - show format folders
+            return this.getFormatFolders();
         }
 
         // Child elements
+        if (element.contextValue === 'format-folder') {
+            // Show categories within each format folder
+            return this.getCategoriesForFormat(element.formatType!);
+        }
+        
         if (element.contextValue === 'category') {
-            return this.getCategoryRules(element.category!);
+            return this.getCategoryRules(element.category!, element.formatType);
         }
 
         return [];
     }
 
-    private async getRootItems(): Promise<RuleTreeItem[]> {
+    private async getFormatFolders(): Promise<RuleTreeItem[]> {
         try {
-            const rules = await this.rulesManager.searchRules(this.searchQuery, this.currentFilters);
-            console.log(`📊 TreeView getRootItems: Found ${rules.length} total rules`);
+            const { directoryRules, fileRules } = await this.rulesManager.getRulesByFormat();
+            
+            const folders: RuleTreeItem[] = [];
+            
+            // Classic Rules folder (directory format)
+            if (directoryRules.length > 0) {
+                const activeCount = directoryRules.filter(r => r.isActive).length;
+                const favoriteCount = directoryRules.filter(r => r.isFavorite).length;
+                
+                let description = `${directoryRules.length} rules`;
+                if (activeCount > 0) {
+                    description += ` • ${activeCount} active`;
+                }
+                if (favoriteCount > 0) {
+                    description += ` • ${favoriteCount} favorites`;
+                }
+
+                const classicFolder = new RuleTreeItem(
+                    'Classic Rules',
+                    vscode.TreeItemCollapsibleState.Expanded,
+                    'format-folder',
+                    description
+                );
+                classicFolder.formatType = 'directory';
+                classicFolder.iconPath = new vscode.ThemeIcon('folder-opened');
+                folders.push(classicFolder);
+            }
+            
+            // New Rules folder (file format)
+            if (fileRules.length > 0) {
+                const activeCount = fileRules.filter(r => r.isActive).length;
+                const favoriteCount = fileRules.filter(r => r.isFavorite).length;
+                
+                let description = `${fileRules.length} rules`;
+                if (activeCount > 0) {
+                    description += ` • ${activeCount} active`;
+                }
+                if (favoriteCount > 0) {
+                    description += ` • ${favoriteCount} favorites`;
+                }
+
+                const newFolder = new RuleTreeItem(
+                    'New Rules',
+                    vscode.TreeItemCollapsibleState.Expanded,
+                    'format-folder',
+                    description
+                );
+                newFolder.formatType = 'file';
+                newFolder.iconPath = new vscode.ThemeIcon('folder-opened', new vscode.ThemeColor('charts.blue'));
+                folders.push(newFolder);
+            }
+            
+            console.log(`📁 Format folders: ${folders.length} folders created`);
+            return folders;
+            
+        } catch (error) {
+            console.error('Failed to get format folders:', error);
+            return [new RuleTreeItem(
+                'Error loading rules',
+                vscode.TreeItemCollapsibleState.None,
+                'error'
+            )];
+        }
+    }
+
+    private async getCategoriesForFormat(formatType: 'directory' | 'file'): Promise<RuleTreeItem[]> {
+        try {
+            const { directoryRules, fileRules } = await this.rulesManager.getRulesByFormat();
+            const rules = formatType === 'directory' ? directoryRules : fileRules;
             
             if (rules.length === 0) {
                 return [new RuleTreeItem(
@@ -98,76 +167,85 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     category
                 );
                 
-                // Set folder icon for categories
+                treeItem.formatType = formatType;
                 treeItem.iconPath = new vscode.ThemeIcon('folder');
                 
-                // Log for debugging
-                console.log(`📁 Category ${category}: ${categoryRules.length} rules, ${activeCount} active, ${favoriteCount} favorites`);
+                console.log(`📁 Category ${category} (${formatType}): ${categoryRules.length} rules`);
                 
                 return treeItem;
             });
 
         } catch (error) {
-            console.error('Failed to get root items:', error);
-            return [new RuleTreeItem(
-                'Error loading rules',
-                vscode.TreeItemCollapsibleState.None,
-                'error'
-            )];
+            console.error(`Failed to get categories for format ${formatType}:`, error);
+            return [];
         }
     }
 
-    private async getCategoryRules(category: string): Promise<RuleTreeItem[]> {
+    private async getCategoryRules(category: string, formatType: 'directory' | 'file' | undefined): Promise<RuleTreeItem[]> {
         try {
-            console.log(`🔍 Getting rules for category: ${category}`);
-            const allRules = await this.rulesManager.searchRules(this.searchQuery, this.currentFilters);
-            const categoryRules = allRules.filter(rule => (rule.category || 'Other') === category);
-            console.log(`📋 Found ${categoryRules.length} rules in category ${category}`);
-
-            return categoryRules.map(rule => {
-                // Simple display name without redundant visual indicators
-                const displayName = rule.name;
-                const description = this.getRuleDescription(rule);
-
-                const treeItem = new RuleTreeItem(
-                    displayName,
-                    vscode.TreeItemCollapsibleState.None,
-                    rule.isActive ? 'rule-active' : 'rule-inactive',
-                    description,
-                    undefined,
-                    rule
-                );
-
-                // Set icon based on rule status - this is the main visual indicator
-                if (rule.isFavorite) {
-                    treeItem.iconPath = new vscode.ThemeIcon('heart-filled');
-                } else if (rule.isActive) {
-                    treeItem.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
-                } else if (rule.isCustom) {
-                    treeItem.iconPath = new vscode.ThemeIcon('edit');
-                } else {
-                    treeItem.iconPath = new vscode.ThemeIcon('file-text');
-                }
-
-                // Add command for single click - toggle rule activation
-                treeItem.command = {
-                    command: 'solidrules.toggleRule',
-                    title: 'Toggle Rule',
-                    arguments: [rule.id]
-                };
-
-                // Add visual styling for active rules using resourceUri
-                if (rule.isActive) {
-                    treeItem.resourceUri = vscode.Uri.parse(`rule-active:${rule.id}`);
-                }
-
-                return treeItem;
-            });
+            console.log(`🔍 Getting rules for category: ${category}, format: ${formatType}`);
+            
+            if (!formatType) {
+                // Fallback to old behavior for backward compatibility
+                const allRules = await this.rulesManager.searchRules(this.searchQuery, this.currentFilters);
+                const categoryRules = allRules.filter(rule => (rule.category || 'Other') === category);
+                console.log(`📋 Found ${categoryRules.length} rules in category ${category} (legacy)`);
+                return this.createRuleTreeItems(categoryRules);
+            }
+            
+            const { directoryRules, fileRules } = await this.rulesManager.getRulesByFormat();
+            const rules = formatType === 'directory' ? directoryRules : fileRules;
+            const categoryRules = rules.filter(rule => (rule.category || 'Other') === category);
+            
+            console.log(`📋 Found ${categoryRules.length} rules in category ${category} (${formatType})`);
+            return this.createRuleTreeItems(categoryRules);
 
         } catch (error) {
             console.error(`Failed to get rules for category ${category}:`, error);
             return [];
         }
+    }
+
+    private createRuleTreeItems(rules: CursorRule[]): RuleTreeItem[] {
+        return rules.map(rule => {
+            // Simple display name without redundant visual indicators
+            const displayName = rule.name;
+            const description = this.getRuleDescription(rule);
+
+            const treeItem = new RuleTreeItem(
+                displayName,
+                vscode.TreeItemCollapsibleState.None,
+                rule.isActive ? 'rule-active' : 'rule-inactive',
+                description,
+                undefined,
+                rule
+            );
+
+            // Set icon based on rule status - this is the main visual indicator
+            if (rule.isFavorite) {
+                treeItem.iconPath = new vscode.ThemeIcon('heart-filled');
+            } else if (rule.isActive) {
+                treeItem.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+            } else if (rule.isCustom) {
+                treeItem.iconPath = new vscode.ThemeIcon('edit');
+            } else {
+                treeItem.iconPath = new vscode.ThemeIcon('file-text');
+            }
+
+            // Add command for single click - toggle rule activation
+            treeItem.command = {
+                command: 'solidrules.toggleRule',
+                title: 'Toggle Rule',
+                arguments: [rule.id]
+            };
+
+            // Add visual styling for active rules using resourceUri
+            if (rule.isActive) {
+                treeItem.resourceUri = vscode.Uri.parse(`rule-active:${rule.id}`);
+            }
+
+            return treeItem;
+        });
     }
 
     private getRuleDescription(rule: CursorRule): string {
@@ -218,8 +296,10 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
 }
 
 export class RuleTreeItem extends BaseRuleTreeItem {
+    public formatType?: 'directory' | 'file'; // Track rule format type
+    
     protected getTooltipPrefix(): string {
-        return '';
+        return '(Rule)';
     }
 
     iconPath = new vscode.ThemeIcon('file-text');

@@ -36,6 +36,7 @@ export interface GitHubRuleInfo {
     size: number;
     download_url: string;
     type: 'file' | 'dir';
+    format?: 'directory' | 'file'; // Format: 'directory' for old format, 'file' for new .mdc format
     content?: string;
 }
 
