@@ -9,11 +9,12 @@ export class DatabaseManager {
 
     // Enhanced mutex for better concurrency control
     private saveMutex: Promise<void> = Promise.resolve();
-    private batchMutex: Promise<void> = Promise.resolve();
+    // Note: batchMutex removed as it's not used in current implementation
+    // TODO: Implement proper batch operations if needed in the future
 
-    // Performance optimization: cache frequently accessed data
-    private rulesCache: CursorRule[] | null = null;
-    private cacheInvalidated = true;
+    // Performance optimization: cache frequently accessed data  
+    // Note: Cache implementation removed for now to reduce complexity
+    // TODO: Implement proper caching strategy with invalidation if performance becomes an issue
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -229,13 +230,19 @@ export class DatabaseManager {
             const workspaceData = workspaces.find(w => w.workspaceId === workspaceId);
             
             if (workspaceData) {
-                return {
+                const config: WorkspaceRuleConfig = {
                     workspaceId: workspaceData.workspaceId,
                     activeRules: workspaceData.activeRules || [],
                     rulesDirectory: workspaceData.rulesDirectory || 'cursorRules',
-                    lastSyncDate: workspaceData.lastSyncDate ? new Date(workspaceData.lastSyncDate) : undefined,
                     maintainLegacyFormat: workspaceData.maintainLegacyFormat
                 };
+                
+                // Add lastSyncDate only if it exists (avoiding undefined assignment)
+                if (workspaceData.lastSyncDate) {
+                    (config as any).lastSyncDate = new Date(workspaceData.lastSyncDate);
+                }
+                
+                return config;
             }
             
             return null;

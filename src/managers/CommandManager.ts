@@ -520,8 +520,10 @@ export class CommandManager {
             });
 
             if (selected) {
-                const technology = selected.value === 'all' ? undefined : selected.value;
-                await this.rulesExplorerProvider.applyFilters({ technology, sortBy: 'recent' });
+                const filters = selected.value === 'all' 
+                    ? { sortBy: 'recent' as const }
+                    : { technology: selected.value, sortBy: 'recent' as const };
+                await this.rulesExplorerProvider.applyFilters(filters);
             }
         } catch (error) {
             console.error('Failed to filter by technology:', error);
@@ -542,8 +544,10 @@ export class CommandManager {
             });
 
             if (selected) {
-                const category = selected.value === 'all' ? undefined : selected.value;
-                await this.rulesExplorerProvider.applyFilters({ category, sortBy: 'recent' });
+                const filters = selected.value === 'all' 
+                    ? { sortBy: 'recent' as const }
+                    : { category: selected.value, sortBy: 'recent' as const };
+                await this.rulesExplorerProvider.applyFilters(filters);
             }
         } catch (error) {
             console.error('Failed to filter by category:', error);

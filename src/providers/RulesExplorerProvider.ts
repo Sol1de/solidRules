@@ -74,7 +74,9 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
         // Implement LRU cache by removing oldest entries
         if (this.categoriesCache.size >= this.MAX_CACHE_SIZE) {
             const firstKey = this.categoriesCache.keys().next().value;
-            this.categoriesCache.delete(firstKey);
+            if (firstKey !== undefined) {
+                this.categoriesCache.delete(firstKey);
+            }
         }
         
         this.categoriesCache.set(cacheKey, categories);

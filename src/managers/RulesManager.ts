@@ -292,7 +292,7 @@ export class RulesManager {
                     
                     if (shouldForceRefresh) {
                         console.log(`🔄 Smart refresh: Database has ${existingRules.length} rules, GitHub has ${githubRules.length}. Forcing full refresh...`);
-                        progress.report({ message: `Loading ALL ${githubRules.length} rules...` });
+                        progress.report({ message: `Loading ${githubRules.length} rules...` });
                         rulesToUpdate = githubRules; // Process ALL rules
                     } else {
                         // Normal incremental refresh
@@ -796,8 +796,8 @@ export class RulesManager {
                         ruleId: rule.id,
                         ruleName: rule.name,
                         hasUpdate: true,
-                        currentVersion: rule.version,
-                        lastChecked: new Date()
+                        lastChecked: new Date(),
+                        ...(rule.version && { currentVersion: rule.version })
                     };
                     
                     await this.databaseManager.saveUpdateInfo(updateInfo);
@@ -830,12 +830,16 @@ export class RulesManager {
             };
 
             const updatedRule = await this.githubService.createCursorRuleFromGitHub(githubRuleInfo);
-            updatedRule.id = rule.id;
-            updatedRule.isActive = rule.isActive;
-            updatedRule.isFavorite = rule.isFavorite;
-            updatedRule.lastUpdated = new Date();
+            // Create new rule object with updated content but keeping original properties
+            const ruleWithUpdates: CursorRule = {
+                ...updatedRule,
+                id: rule.id,
+                isActive: rule.isActive,
+                isFavorite: rule.isFavorite,
+                lastUpdated: new Date()
+            };
 
-            await this.databaseManager.saveRule(updatedRule);
+            await this.databaseManager.saveRule(ruleWithUpdates);
             
             if (rule.isActive) {
                 await this.updateWorkspaceRules();

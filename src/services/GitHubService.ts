@@ -39,10 +39,22 @@ export class GitHubService {
         }
     }
 
-    // Secure token management
+    // Secure token management with enhanced validation
     async getSecureToken(): Promise<string | undefined> {
         try {
-            return await this.context.secrets.get(this.TOKEN_SECRET_KEY);
+            const token = await this.context.secrets.get(this.TOKEN_SECRET_KEY);
+            
+            // Basic token validation
+            if (token && this.isValidGitHubToken(token)) {
+                return token;
+            }
+            
+            if (token) {
+                console.warn('⚠️ Invalid GitHub token found in secure storage, removing it');
+                await this.deleteSecureToken();
+            }
+            
+            return undefined;
         } catch (error) {
             console.error('❌ Failed to retrieve secure token:', error);
             return undefined;
@@ -51,6 +63,11 @@ export class GitHubService {
 
     async setSecureToken(token: string): Promise<void> {
         try {
+            // Validate token format before storing
+            if (!this.isValidGitHubToken(token)) {
+                throw new Error('Invalid GitHub token format. Token should start with "ghp_" or "github_pat_"');
+            }
+            
             await this.context.secrets.store(this.TOKEN_SECRET_KEY, token);
             console.log('✅ GitHub token stored securely');
             await this.initializeOctokit(); // Reinitialize with new token
@@ -69,6 +86,16 @@ export class GitHubService {
             console.error('❌ Failed to delete secure token:', error);
             throw new Error(`Failed to delete GitHub token: ${error}`);
         }
+    }
+
+    // Token validation helper
+    private isValidGitHubToken(token: string): boolean {
+        if (!token || typeof token !== 'string') {
+            return false;
+        }
+        
+        // Check if token has minimum length and valid prefix
+        return (token.startsWith('ghp_') || token.startsWith('github_pat_')) && token.length > 10;
     }
 
     // Method to refresh token if needed

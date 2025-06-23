@@ -49,8 +49,8 @@ export interface UpdateInfo {
     readonly ruleId: string;
     readonly ruleName: string;
     readonly hasUpdate: boolean;
-    readonly currentVersion?: string;
-    readonly latestVersion?: string;
+    readonly currentVersion?: string | undefined;
+    readonly latestVersion?: string | undefined;
     readonly lastChecked: Date;
 }
 
@@ -59,18 +59,18 @@ export interface WorkspaceRuleConfig {
     readonly workspaceId: string;
     readonly activeRules: ReadonlyArray<string>;
     readonly rulesDirectory: string;
-    readonly lastSyncDate?: Date;
-    readonly maintainLegacyFormat?: boolean;
+    readonly lastSyncDate?: Date | undefined;
+    readonly maintainLegacyFormat?: boolean | undefined;
 }
 
 // Enhanced SearchFilters interface with better defaults
 export interface SearchFilters {
-    readonly technology?: string;
-    readonly category?: string;
-    readonly tags?: ReadonlyArray<string>;
+    readonly technology?: string | undefined;
+    readonly category?: string | undefined;
+    readonly tags?: ReadonlyArray<string> | undefined;
     readonly sortBy: 'recent' | 'alphabetical' | 'popularity';
-    readonly showFavoritesOnly?: boolean;
-    readonly showActiveOnly?: boolean;
+    readonly showFavoritesOnly?: boolean | undefined;
+    readonly showActiveOnly?: boolean | undefined;
 }
 
 // Enhanced NotificationOptions interface
