@@ -238,11 +238,10 @@ export class RulesManager {
     async refreshRules(): Promise<void> {
         try {
             // Refresh GitHub token first (in case it was just configured)
-            this.githubService.refreshToken();
+            await this.githubService.refreshToken();
             
-            // Check if GitHub token is configured
-            const config = vscode.workspace.getConfiguration('solidrules');
-            const githubToken = config.get<string>('githubToken', '');
+            // Check if GitHub token is configured using SecretStorage (consistent with GitHubService)
+            const githubToken = await this.githubService.getSecureToken();
             
             if (!githubToken) {
                 const setupToken = await vscode.window.showWarningMessage(
@@ -293,7 +292,7 @@ export class RulesManager {
                     
                     if (shouldForceRefresh) {
                         console.log(`🔄 Smart refresh: Database has ${existingRules.length} rules, GitHub has ${githubRules.length}. Forcing full refresh...`);
-                        progress.report({ message: `Loading ALL ${githubRules.length} rules...` });
+                        progress.report({ message: `Loading ${githubRules.length} rules...` });
                         rulesToUpdate = githubRules; // Process ALL rules
                     } else {
                         // Normal incremental refresh
@@ -322,8 +321,7 @@ export class RulesManager {
                     }
                     
                     // Dynamic batch size based on GitHub token availability
-                    const config = vscode.workspace.getConfiguration('solidrules');
-                    const hasToken = !!config.get<string>('githubToken', '');
+                    const hasToken = !!(await this.githubService.getSecureToken());
                     
                     // Optimize batch size based on rate limits and rule count
                     let BATCH_SIZE: number;
@@ -798,8 +796,8 @@ export class RulesManager {
                         ruleId: rule.id,
                         ruleName: rule.name,
                         hasUpdate: true,
-                        currentVersion: rule.version,
-                        lastChecked: new Date()
+                        lastChecked: new Date(),
+                        ...(rule.version && { currentVersion: rule.version })
                     };
                     
                     await this.databaseManager.saveUpdateInfo(updateInfo);
@@ -832,12 +830,16 @@ export class RulesManager {
             };
 
             const updatedRule = await this.githubService.createCursorRuleFromGitHub(githubRuleInfo);
-            updatedRule.id = rule.id;
-            updatedRule.isActive = rule.isActive;
-            updatedRule.isFavorite = rule.isFavorite;
-            updatedRule.lastUpdated = new Date();
+            // Create new rule object with updated content but keeping original properties
+            const ruleWithUpdates: CursorRule = {
+                ...updatedRule,
+                id: rule.id,
+                isActive: rule.isActive,
+                isFavorite: rule.isFavorite,
+                lastUpdated: new Date()
+            };
 
-            await this.databaseManager.saveRule(updatedRule);
+            await this.databaseManager.saveRule(ruleWithUpdates);
             
             if (rule.isActive) {
                 await this.updateWorkspaceRules();
@@ -1080,6 +1082,11 @@ export class RulesManager {
     formatLastUpdated(date: Date | undefined): string {
         if (!date) return 'Never';
         return formatDistanceToNow(date, { addSuffix: true });
+    }
+
+    // Provide access to GitHubService for secure token management
+    getGitHubService(): GitHubService {
+        return this.githubService;
     }
 
     async clearAllData(): Promise<void> {

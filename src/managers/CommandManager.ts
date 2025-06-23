@@ -11,36 +11,48 @@ export class CommandManager {
     ) {}
 
     registerCommands(context: vscode.ExtensionContext): void {
-        // Register all commands
+        // Register all commands with enhanced error handling
         this.disposables.push(
-            vscode.commands.registerCommand('solidrules.refreshRules', () => this.refreshRules()),
-            vscode.commands.registerCommand('solidrules.searchRules', () => this.searchRules()),
-            vscode.commands.registerCommand('solidrules.activateRule', (ruleId: string) => this.activateRule(ruleId)),
-            vscode.commands.registerCommand('solidrules.deactivateRule', (ruleId: string) => this.deactivateRule(ruleId)),
-            vscode.commands.registerCommand('solidrules.toggleRule', (ruleId: string) => this.toggleRule(ruleId)),
-            vscode.commands.registerCommand('solidrules.bulkToggle', () => this.showBulkToggleMenu()),
-            vscode.commands.registerCommand('solidrules.deleteRule', (ruleId: string) => this.deleteRule(ruleId)),
-            vscode.commands.registerCommand('solidrules.previewRule', (ruleId: string) => this.previewRule(ruleId)),
-            vscode.commands.registerCommand('solidrules.addToFavorites', (ruleId: string) => this.addToFavorites(ruleId)),
-            vscode.commands.registerCommand('solidrules.removeFromFavorites', (ruleId: string) => this.removeFromFavorites(ruleId)),
-            vscode.commands.registerCommand('solidrules.importCustomRule', () => this.importCustomRule()),
-            vscode.commands.registerCommand('solidrules.exportRules', () => this.exportRules()),
-            vscode.commands.registerCommand('solidrules.settings', () => this.openSettings()),
-            vscode.commands.registerCommand('solidrules.updateRule', (ruleId: string) => this.updateRule(ruleId)),
-            vscode.commands.registerCommand('solidrules.updateAllRules', () => this.updateAllRules()),
-            vscode.commands.registerCommand('solidrules.syncWorkspace', () => this.syncWorkspace()),
-            vscode.commands.registerCommand('solidrules.clearFilters', () => this.clearFilters()),
-            vscode.commands.registerCommand('solidrules.filterByTechnology', () => this.filterByTechnology()),
-            vscode.commands.registerCommand('solidrules.filterByCategory', () => this.filterByCategory()),
-            vscode.commands.registerCommand('solidrules.sortRules', () => this.sortRules()),
-            vscode.commands.registerCommand('solidrules.configureGitHubToken', () => this.configureGitHubToken()),
-            vscode.commands.registerCommand('solidrules.resetGitHubToken', () => this.resetGitHubToken()),
-            vscode.commands.registerCommand('solidrules.clearDatabase', () => this.clearDatabase()),
-            vscode.commands.registerCommand('solidrules.skipTokenSetup', () => this.skipTokenSetup())
+            vscode.commands.registerCommand('solidrules.refreshRules', () => this.handleCommand('refreshRules', () => this.refreshRules())),
+            vscode.commands.registerCommand('solidrules.searchRules', () => this.handleCommand('searchRules', () => this.searchRules())),
+            vscode.commands.registerCommand('solidrules.activateRule', (ruleId: string) => this.handleCommand('activateRule', () => this.activateRule(ruleId))),
+            vscode.commands.registerCommand('solidrules.deactivateRule', (ruleId: string) => this.handleCommand('deactivateRule', () => this.deactivateRule(ruleId))),
+            vscode.commands.registerCommand('solidrules.toggleRule', (ruleId: string) => this.handleCommand('toggleRule', () => this.toggleRule(ruleId))),
+            vscode.commands.registerCommand('solidrules.bulkToggle', () => this.handleCommand('bulkToggle', () => this.showBulkToggleMenu())),
+            vscode.commands.registerCommand('solidrules.deleteRule', (ruleId: string) => this.handleCommand('deleteRule', () => this.deleteRule(ruleId))),
+            vscode.commands.registerCommand('solidrules.previewRule', (ruleId: string) => this.handleCommand('previewRule', () => this.previewRule(ruleId))),
+            vscode.commands.registerCommand('solidrules.addToFavorites', (ruleId: string) => this.handleCommand('addToFavorites', () => this.addToFavorites(ruleId))),
+            vscode.commands.registerCommand('solidrules.removeFromFavorites', (ruleId: string) => this.handleCommand('removeFromFavorites', () => this.removeFromFavorites(ruleId))),
+            vscode.commands.registerCommand('solidrules.importCustomRule', () => this.handleCommand('importCustomRule', () => this.importCustomRule())),
+            vscode.commands.registerCommand('solidrules.exportRules', () => this.handleCommand('exportRules', () => this.exportRules())),
+            vscode.commands.registerCommand('solidrules.settings', () => this.handleCommand('settings', () => this.openSettings())),
+            vscode.commands.registerCommand('solidrules.updateRule', (ruleId: string) => this.handleCommand('updateRule', () => this.updateRule(ruleId))),
+            vscode.commands.registerCommand('solidrules.updateAllRules', () => this.handleCommand('updateAllRules', () => this.updateAllRules())),
+            vscode.commands.registerCommand('solidrules.syncWorkspace', () => this.handleCommand('syncWorkspace', () => this.syncWorkspace())),
+            vscode.commands.registerCommand('solidrules.clearFilters', () => this.handleCommand('clearFilters', () => this.clearFilters())),
+            vscode.commands.registerCommand('solidrules.filterByTechnology', () => this.handleCommand('filterByTechnology', () => this.filterByTechnology())),
+            vscode.commands.registerCommand('solidrules.filterByCategory', () => this.handleCommand('filterByCategory', () => this.filterByCategory())),
+            vscode.commands.registerCommand('solidrules.sortRules', () => this.handleCommand('sortRules', () => this.sortRules())),
+            vscode.commands.registerCommand('solidrules.configureGitHubToken', () => this.handleCommand('configureGitHubToken', () => this.configureGitHubToken())),
+            vscode.commands.registerCommand('solidrules.resetGitHubToken', () => this.handleCommand('resetGitHubToken', () => this.resetGitHubToken())),
+            vscode.commands.registerCommand('solidrules.clearDatabase', () => this.handleCommand('clearDatabase', () => this.clearDatabase())),
+            vscode.commands.registerCommand('solidrules.skipTokenSetup', () => this.handleCommand('skipTokenSetup', () => this.skipTokenSetup()))
         );
 
         // Add disposables to context
         context.subscriptions.push(...this.disposables);
+    }
+
+    // Standardized error handling wrapper for all commands
+    private async handleCommand(commandName: string, operation: () => Promise<void>): Promise<void> {
+        try {
+            console.log(`🚀 Executing command: ${commandName}`);
+            await operation();
+            console.log(`✅ Command completed: ${commandName}`);
+        } catch (error) {
+            console.error(`❌ Command failed: ${commandName}`, error);
+            vscode.window.showErrorMessage(`Command failed: ${error}`);
+        }
     }
 
     private async refreshRules(): Promise<void> {
@@ -233,8 +245,6 @@ export class CommandManager {
             vscode.window.showErrorMessage(`Failed to show bulk toggle menu: ${error}`);
         }
     }
-
-
 
     private async deleteRule(ruleIdOrTreeItem?: string | any): Promise<void> {
         try {
@@ -510,8 +520,10 @@ export class CommandManager {
             });
 
             if (selected) {
-                const technology = selected.value === 'all' ? undefined : selected.value;
-                await this.rulesExplorerProvider.applyFilters({ technology, sortBy: 'recent' });
+                const filters = selected.value === 'all' 
+                    ? { sortBy: 'recent' as const }
+                    : { technology: selected.value, sortBy: 'recent' as const };
+                await this.rulesExplorerProvider.applyFilters(filters);
             }
         } catch (error) {
             console.error('Failed to filter by technology:', error);
@@ -532,8 +544,10 @@ export class CommandManager {
             });
 
             if (selected) {
-                const category = selected.value === 'all' ? undefined : selected.value;
-                await this.rulesExplorerProvider.applyFilters({ category, sortBy: 'recent' });
+                const filters = selected.value === 'all' 
+                    ? { sortBy: 'recent' as const }
+                    : { category: selected.value, sortBy: 'recent' as const };
+                await this.rulesExplorerProvider.applyFilters(filters);
             }
         } catch (error) {
             console.error('Failed to filter by category:', error);
@@ -566,50 +580,65 @@ export class CommandManager {
                 prompt: 'Enter your GitHub Personal Access Token',
                 placeHolder: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
                 password: true,
-                ignoreFocusOut: true
+                ignoreFocusOut: true,
+                validateInput: (value) => {
+                    // Enhanced input validation
+                    if (!value) {
+                        return 'Token is required';
+                    }
+                    if (value.length < 10) {
+                        return 'Token appears to be too short';
+                    }
+                    if (!value.startsWith('ghp_') && !value.startsWith('github_pat_')) {
+                        return 'Token should start with "ghp_" or "github_pat_"';
+                    }
+                    return null;
+                }
             });
 
             if (token) {
-                await this.saveGitHubToken(token);
-                vscode.window.showInformationMessage('GitHub token configured successfully!');
+                // Use secure token storage instead of configuration
+                const githubService = this.rulesManager.getGitHubService();
+                await githubService.setSecureToken(token);
                 
-                // Set context to show other panels
-                vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
+                // Update the context to show the Rules Explorer
+                await vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
+                
+                vscode.window.showInformationMessage('✅ GitHub token configured and stored securely');
                 
                 // Refresh rules after token setup
                 await this.rulesManager.refreshRules();
             }
         } catch (error) {
-            console.error('Failed to configure GitHub token:', error);
-            vscode.window.showErrorMessage('Failed to save GitHub token');
+            console.error('❌ Failed to configure GitHub token:', error);
+            vscode.window.showErrorMessage(`Failed to configure GitHub token: ${error}`);
+            throw error;
         }
-    }
-
-    private async saveGitHubToken(token: string): Promise<void> {
-        const config = vscode.workspace.getConfiguration('solidrules');
-        await config.update('githubToken', token, vscode.ConfigurationTarget.Global);
     }
 
     private async resetGitHubToken(): Promise<void> {
         try {
             const confirmation = await vscode.window.showWarningMessage(
                 'Are you sure you want to reset your GitHub token? This will limit you to 60 requests per hour instead of 5000.',
+                { modal: true },
                 'Reset Token',
                 'Cancel'
             );
 
             if (confirmation === 'Reset Token') {
-                const config = vscode.workspace.getConfiguration('solidrules');
-                await config.update('githubToken', undefined, vscode.ConfigurationTarget.Global);
+                // Use secure token storage instead of configuration
+                const githubService = this.rulesManager.getGitHubService();
+                await githubService.deleteSecureToken();
                 
                 // Set context to hide other panels and show token setup
-                vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', false);
+                await vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', false);
                 
-                vscode.window.showInformationMessage('GitHub token has been reset');
+                vscode.window.showInformationMessage('✅ GitHub token has been reset securely');
             }
         } catch (error) {
-            console.error('Failed to reset GitHub token:', error);
-            vscode.window.showErrorMessage('Failed to reset GitHub token');
+            console.error('❌ Failed to reset GitHub token:', error);
+            vscode.window.showErrorMessage(`Failed to reset GitHub token: ${error}`);
+            throw error;
         }
     }
 
@@ -625,19 +654,27 @@ export class CommandManager {
             if (confirmation === 'Clear Database') {
                 const userInput = await vscode.window.showInputBox({
                     prompt: 'Type "CLEAR" to confirm database deletion',
-                    placeHolder: 'CLEAR'
+                    placeHolder: 'CLEAR',
+                    validateInput: (value) => {
+                        // Enhanced validation for destructive operations
+                        if (value !== 'CLEAR') {
+                            return 'Please type "CLEAR" exactly to confirm';
+                        }
+                        return null;
+                    }
                 });
 
                 if (userInput === 'CLEAR') {
                     await this.rulesManager.clearAllData();
-                    vscode.window.showInformationMessage('Database cleared successfully');
+                    vscode.window.showInformationMessage('✅ Database cleared successfully');
                 } else {
                     vscode.window.showInformationMessage('Database clear cancelled');
                 }
             }
         } catch (error) {
-            console.error('Failed to clear database:', error);
-            vscode.window.showErrorMessage('Failed to clear database');
+            console.error('❌ Failed to clear database:', error);
+            vscode.window.showErrorMessage(`Failed to clear database: ${error}`);
+            throw error;
         }
     }
 
@@ -651,15 +688,17 @@ export class CommandManager {
 
             if (confirmation === 'Continue Without Token') {
                 // Set context to show other panels
-                vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
+                await vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
                 
                 // Refresh rules with rate limit
                 await this.rulesManager.refreshRules();
+                vscode.window.showInformationMessage('✅ Continuing without token (rate limited)');
             } else if (confirmation === 'Setup Token') {
                 await this.configureGitHubToken();
             }
         } catch (error) {
-            console.error('Failed to skip token setup:', error);
+            console.error('❌ Failed to skip token setup:', error);
+            throw error;
         }
     }
 

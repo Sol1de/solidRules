@@ -510,7 +510,22 @@ Source: ${rule.isCustom ? 'Custom' : 'awesome-cursorrules'}
                 const currentHash = this.generateContentHash(content);
                 const lastHash = this.lastSyncedRules.get(rule.id);
                 
-                if (lastHash !== currentHash) {
+                // Check if file actually exists on disk (critical fix)
+                const workspaceId = this.getCurrentWorkspaceId();
+                let fileExists = false;
+                if (workspaceId) {
+                    const fileName = `${this.sanitizeFileName(rule.name)}.mdc`;
+                    const filePath = path.join(workspaceId, this.PROJECT_RULES_DIR, fileName);
+                    try {
+                        await fs.access(filePath);
+                        fileExists = true;
+                    } catch {
+                        fileExists = false;
+                    }
+                }
+                
+                // Rule needs sync if: hash changed OR file doesn't exist
+                if (lastHash !== currentHash || !fileExists) {
                     changedRules.push(rule);
                     this.lastSyncedRules.set(rule.id, currentHash);
                 }
@@ -585,11 +600,21 @@ Source: ${rule.isCustom ? 'Custom' : 'awesome-cursorrules'}
             const masterFilePath = path.join(workspaceId, this.CURSOR_RULES_FILE);
             const content = this.generateMasterRulesContent(activeRules);
             
-            // Check if content has changed
+            // Check if content has changed AND file exists
             const contentHash = this.generateContentHash(content);
             const lastMasterHash = this.lastSyncedRules.get('__MASTER__');
             
-            if (lastMasterHash === contentHash) {
+            // Check if master file actually exists on disk
+            let masterFileExists = false;
+            try {
+                await fs.access(masterFilePath);
+                masterFileExists = true;
+            } catch {
+                masterFileExists = false;
+            }
+            
+            // Skip only if hash is same AND file exists
+            if (lastMasterHash === contentHash && masterFileExists) {
                 console.log('⚡ Master file unchanged - skipping write');
                 return;
             }
@@ -683,5 +708,20 @@ Source: ${rule.isCustom ? 'Custom' : 'awesome-cursorrules'}
         } catch (error) {
             console.error(`Failed to remove optimized workspace rule ${ruleName}:`, error);
         }
+    }
+
+    // Method to clear sync cache (useful for debugging or reset)
+    clearSyncCache(): void {
+        console.log(`🗑️ Clearing sync cache - ${this.lastSyncedRules.size} entries removed`);
+        this.lastSyncedRules.clear();
+    }
+
+    // Debug method to inspect sync cache state
+    getSyncCacheStats(): { size: number; entries: string[] } {
+        const entries = Array.from(this.lastSyncedRules.keys());
+        return {
+            size: this.lastSyncedRules.size,
+            entries: entries
+        };
     }
 } 

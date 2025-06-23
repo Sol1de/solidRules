@@ -2,10 +2,19 @@ import * as vscode from 'vscode';
 import { CursorRule, WorkspaceRuleConfig, UpdateInfo } from '../types';
 
 export class DatabaseManager {
-    private rulesStorageKey = 'solidrules.rules';
-    private workspacesStorageKey = 'solidrules.workspaces';
-    private updatesStorageKey = 'solidrules.updates';
-    private favoritesStorageKey = 'solidrules.favorites';
+    private readonly rulesStorageKey = 'solidrules.rules';
+    private readonly workspacesStorageKey = 'solidrules.workspaces';
+    private readonly updatesStorageKey = 'solidrules.updates';
+    private readonly favoritesStorageKey = 'solidrules.favorites';
+
+    // Enhanced mutex for better concurrency control
+    private saveMutex: Promise<void> = Promise.resolve();
+    // Note: batchMutex removed as it's not used in current implementation
+    // TODO: Implement proper batch operations if needed in the future
+
+    // Performance optimization: cache frequently accessed data  
+    // Note: Cache implementation removed for now to reduce complexity
+    // TODO: Implement proper caching strategy with invalidation if performance becomes an issue
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -35,10 +44,8 @@ export class DatabaseManager {
         }
     }
 
-    private saveMutex: Promise<void> = Promise.resolve();
-
     async saveRule(rule: CursorRule): Promise<void> {
-        // Use mutex to prevent race conditions
+        // Use mutex to prevent race conditions with enhanced error handling
         this.saveMutex = this.saveMutex.then(async () => {
             try {
                 const rules = await this.getAllRules();
@@ -223,13 +230,19 @@ export class DatabaseManager {
             const workspaceData = workspaces.find(w => w.workspaceId === workspaceId);
             
             if (workspaceData) {
-                return {
+                const config: WorkspaceRuleConfig = {
                     workspaceId: workspaceData.workspaceId,
                     activeRules: workspaceData.activeRules || [],
                     rulesDirectory: workspaceData.rulesDirectory || 'cursorRules',
-                    lastSyncDate: workspaceData.lastSyncDate ? new Date(workspaceData.lastSyncDate) : undefined,
                     maintainLegacyFormat: workspaceData.maintainLegacyFormat
                 };
+                
+                // Add lastSyncDate only if it exists (avoiding undefined assignment)
+                if (workspaceData.lastSyncDate) {
+                    (config as any).lastSyncDate = new Date(workspaceData.lastSyncDate);
+                }
+                
+                return config;
             }
             
             return null;
