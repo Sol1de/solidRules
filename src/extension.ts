@@ -6,6 +6,7 @@ import { RulesExplorerProvider } from './providers/RulesExplorerProvider';
 import { ActiveRulesProvider } from './providers/ActiveRulesProvider';
 import { FavoritesProvider } from './providers/FavoritesProvider';
 import { TokenSetupViewProvider } from './providers/TokenSetupViewProvider';
+import { SettingsViewProvider } from './providers/SettingsViewProvider';
 import { CommandManager } from './managers/CommandManager';
 import { NotificationManager } from './managers/NotificationManager';
 import { WorkspaceManager } from './managers/WorkspaceManager';
@@ -35,6 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Check token configuration using secure storage
         const hasToken = !!(await githubService.getSecureToken());
         await vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', hasToken);
+        await vscode.commands.executeCommand('setContext', 'solidrules.showSettings', false);
         console.log(`🔒 Token configured: ${hasToken ? 'Yes' : 'No'}`);
 
         // Register providers with proper error handling
@@ -42,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const activeRulesProvider = new ActiveRulesProvider(rulesManager);
         const favoritesProvider = new FavoritesProvider(rulesManager);
         const tokenSetupProvider = new TokenSetupViewProvider(context);
+        const settingsProvider = new SettingsViewProvider(context, rulesManager);
         const activeRuleDecorator = new ActiveRuleDecorator();
         
         // Register tree data providers with error handling
@@ -56,9 +59,10 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.registerFileDecorationProvider(activeRuleDecorator)
         );
         
-        // Register webview view provider
+        // Register webview view providers
         context.subscriptions.push(
-            vscode.window.registerWebviewViewProvider(TokenSetupViewProvider.viewType, tokenSetupProvider)
+            vscode.window.registerWebviewViewProvider(TokenSetupViewProvider.viewType, tokenSetupProvider),
+            vscode.window.registerWebviewViewProvider(SettingsViewProvider.viewType, settingsProvider)
         );
         
         console.log('✅ TokenSetupViewProvider registered with viewType:', TokenSetupViewProvider.viewType);

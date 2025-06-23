@@ -38,14 +38,20 @@
           "when": "!solidrules.tokenConfigured"
         },
         {
+          "id": "solidrules.settings",
+          "name": "Settings",
+          "type": "webview",
+          "when": "solidrules.tokenConfigured && solidrules.showSettings"
+        },
+        {
           "id": "solidrules.activeRules",
           "name": "Active Rules",
-          "when": "solidrules.tokenConfigured"
+          "when": "solidrules.tokenConfigured && !solidrules.showSettings"
         },
         {
           "id": "solidrules.favorites",
           "name": "Favorites",
-          "when": "solidrules.tokenConfigured"
+          "when": "solidrules.tokenConfigured && !solidrules.showSettings"
         }
       ]
     },
@@ -142,9 +148,14 @@
         "icon": "$(export)"
       },
       {
-        "command": "solidrules.settings",
-        "title": "Settings",
+        "command": "solidrules.openSettings",
+        "title": "Open Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "solidrules.closeSettings",
+        "title": "Close Settings",
+        "icon": "$(close)"
       },
       {
         "command": "solidrules.configureGitHubToken",
@@ -190,18 +201,13 @@
           "group": "navigation"
         },
         {
-          "command": "solidrules.configureGitHubToken",
+          "command": "solidrules.openSettings",
           "when": "view == solidrules.rulesExplorer",
           "group": "navigation"
         },
         {
-          "command": "solidrules.resetGitHubToken",
-          "when": "view == solidrules.rulesExplorer",
-          "group": "navigation"
-        },
-        {
-          "command": "solidrules.clearDatabase",
-          "when": "view == solidrules.rulesExplorer",
+          "command": "solidrules.closeSettings",
+          "when": "view == solidrules.settings",
           "group": "navigation"
         }
       ],

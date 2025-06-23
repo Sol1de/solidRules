@@ -25,7 +25,8 @@ export class CommandManager {
             vscode.commands.registerCommand('solidrules.removeFromFavorites', (ruleId: string) => this.handleCommand('removeFromFavorites', () => this.removeFromFavorites(ruleId))),
             vscode.commands.registerCommand('solidrules.importCustomRule', () => this.handleCommand('importCustomRule', () => this.importCustomRule())),
             vscode.commands.registerCommand('solidrules.exportRules', () => this.handleCommand('exportRules', () => this.exportRules())),
-            vscode.commands.registerCommand('solidrules.settings', () => this.handleCommand('settings', () => this.openSettings())),
+            vscode.commands.registerCommand('solidrules.openSettings', () => this.handleCommand('openSettings', () => this.openSettings())),
+            vscode.commands.registerCommand('solidrules.closeSettings', () => this.handleCommand('closeSettings', () => this.closeSettings())),
             vscode.commands.registerCommand('solidrules.updateRule', (ruleId: string) => this.handleCommand('updateRule', () => this.updateRule(ruleId))),
             vscode.commands.registerCommand('solidrules.updateAllRules', () => this.handleCommand('updateAllRules', () => this.updateAllRules())),
             vscode.commands.registerCommand('solidrules.syncWorkspace', () => this.handleCommand('syncWorkspace', () => this.syncWorkspace())),
@@ -462,9 +463,23 @@ export class CommandManager {
 
     private async openSettings(): Promise<void> {
         try {
-            await vscode.commands.executeCommand('workbench.action.openSettings', 'solidrules');
+            // Set context to show settings view and hide other views
+            await vscode.commands.executeCommand('setContext', 'solidrules.showSettings', true);
+            console.log('✅ Settings view opened');
         } catch (error) {
-            console.error('Failed to open settings:', error);
+            console.error('❌ Failed to open settings:', error);
+            vscode.window.showErrorMessage(`Failed to open settings: ${error}`);
+        }
+    }
+
+    private async closeSettings(): Promise<void> {
+        try {
+            // Set context to hide settings view and show normal views
+            await vscode.commands.executeCommand('setContext', 'solidrules.showSettings', false);
+            console.log('✅ Settings view closed');
+        } catch (error) {
+            console.error('❌ Failed to close settings:', error);
+            vscode.window.showErrorMessage(`Failed to close settings: ${error}`);
         }
     }
 
