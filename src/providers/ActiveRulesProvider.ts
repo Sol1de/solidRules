@@ -23,12 +23,18 @@ export class ActiveRulesProvider implements vscode.TreeDataProvider<ActiveRuleTr
     }
 
     async getChildren(element?: ActiveRuleTreeItem): Promise<ActiveRuleTreeItem[]> {
-        // Check if GitHub token is configured
-        const config = vscode.workspace.getConfiguration('solidrules');
-        const githubToken = config.get<string>('githubToken', '');
-        
-        if (!githubToken) {
-            // Hide this panel when token is not configured
+        // Check if GitHub token is configured via SecretStorage
+        try {
+            const githubService = this.rulesManager.getGitHubService();
+            const githubToken = await githubService.getSecureToken();
+            
+            if (!githubToken) {
+                console.log('🔍 ActiveRulesProvider: No GitHub token configured, hiding active rules panel');
+                // Hide this panel when token is not configured
+                return [];
+            }
+        } catch (error) {
+            console.error('❌ ActiveRulesProvider: Failed to check GitHub token:', error);
             return [];
         }
         
