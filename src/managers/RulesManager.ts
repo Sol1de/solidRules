@@ -238,11 +238,10 @@ export class RulesManager {
     async refreshRules(): Promise<void> {
         try {
             // Refresh GitHub token first (in case it was just configured)
-            this.githubService.refreshToken();
+            await this.githubService.refreshToken();
             
-            // Check if GitHub token is configured
-            const config = vscode.workspace.getConfiguration('solidrules');
-            const githubToken = config.get<string>('githubToken', '');
+            // Check if GitHub token is configured using SecretStorage (consistent with GitHubService)
+            const githubToken = await this.githubService.getSecureToken();
             
             if (!githubToken) {
                 const setupToken = await vscode.window.showWarningMessage(
@@ -322,8 +321,7 @@ export class RulesManager {
                     }
                     
                     // Dynamic batch size based on GitHub token availability
-                    const config = vscode.workspace.getConfiguration('solidrules');
-                    const hasToken = !!config.get<string>('githubToken', '');
+                    const hasToken = !!(await this.githubService.getSecureToken());
                     
                     // Optimize batch size based on rate limits and rule count
                     let BATCH_SIZE: number;
@@ -1080,6 +1078,11 @@ export class RulesManager {
     formatLastUpdated(date: Date | undefined): string {
         if (!date) return 'Never';
         return formatDistanceToNow(date, { addSuffix: true });
+    }
+
+    // Provide access to GitHubService for secure token management
+    getGitHubService(): GitHubService {
+        return this.githubService;
     }
 
     async clearAllData(): Promise<void> {

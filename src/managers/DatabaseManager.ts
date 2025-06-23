@@ -2,10 +2,18 @@ import * as vscode from 'vscode';
 import { CursorRule, WorkspaceRuleConfig, UpdateInfo } from '../types';
 
 export class DatabaseManager {
-    private rulesStorageKey = 'solidrules.rules';
-    private workspacesStorageKey = 'solidrules.workspaces';
-    private updatesStorageKey = 'solidrules.updates';
-    private favoritesStorageKey = 'solidrules.favorites';
+    private readonly rulesStorageKey = 'solidrules.rules';
+    private readonly workspacesStorageKey = 'solidrules.workspaces';
+    private readonly updatesStorageKey = 'solidrules.updates';
+    private readonly favoritesStorageKey = 'solidrules.favorites';
+
+    // Enhanced mutex for better concurrency control
+    private saveMutex: Promise<void> = Promise.resolve();
+    private batchMutex: Promise<void> = Promise.resolve();
+
+    // Performance optimization: cache frequently accessed data
+    private rulesCache: CursorRule[] | null = null;
+    private cacheInvalidated = true;
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -35,10 +43,8 @@ export class DatabaseManager {
         }
     }
 
-    private saveMutex: Promise<void> = Promise.resolve();
-
     async saveRule(rule: CursorRule): Promise<void> {
-        // Use mutex to prevent race conditions
+        // Use mutex to prevent race conditions with enhanced error handling
         this.saveMutex = this.saveMutex.then(async () => {
             try {
                 const rules = await this.getAllRules();

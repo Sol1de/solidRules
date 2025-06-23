@@ -11,30 +11,75 @@ export class GitHubService {
         { path: 'rules-new', format: 'file' }       // New format: direct .mdc files
     ];
 
-    constructor() {
+    // Secure token storage using VSCode SecretStorage API
+    private readonly TOKEN_SECRET_KEY = 'solidrules.github.token';
+
+    constructor(private context: vscode.ExtensionContext) {
         this.initializeOctokit();
     }
 
-    private initializeOctokit(): void {
-        const config = vscode.workspace.getConfiguration('solidrules');
-        const githubToken = config.get<string>('githubToken', '');
-        
-        if (githubToken) {
-            console.log('✅ Using GitHub token for API requests (5000 req/h)');
-            console.log(`Token starts with: ${githubToken.substring(0, 10)}...`);
-            this.octokit = new Octokit({
-                auth: githubToken
-            });
-        } else {
-            console.log('⚠️ Using GitHub API without token (60 req/h limit)');
+    private async initializeOctokit(): Promise<void> {
+        try {
+            const githubToken = await this.getSecureToken();
+            
+            if (githubToken) {
+                console.log('✅ Using GitHub token for API requests (5000 req/h)');
+                console.log(`Token starts with: ${githubToken.substring(0, 10)}...`);
+                this.octokit = new Octokit({
+                    auth: githubToken
+                });
+            } else {
+                console.log('⚠️ Using GitHub API without token (60 req/h limit)');
+                this.octokit = new Octokit();
+            }
+        } catch (error) {
+            console.error('❌ Failed to initialize GitHub service:', error);
+            // Fallback to non-authenticated client
             this.octokit = new Octokit();
         }
     }
 
-    // Method to refresh token if settings change
-    public refreshToken(): void {
-        console.log('🔄 Refreshing GitHub token...');
-        this.initializeOctokit();
+    // Secure token management
+    async getSecureToken(): Promise<string | undefined> {
+        try {
+            return await this.context.secrets.get(this.TOKEN_SECRET_KEY);
+        } catch (error) {
+            console.error('❌ Failed to retrieve secure token:', error);
+            return undefined;
+        }
+    }
+
+    async setSecureToken(token: string): Promise<void> {
+        try {
+            await this.context.secrets.store(this.TOKEN_SECRET_KEY, token);
+            console.log('✅ GitHub token stored securely');
+            await this.initializeOctokit(); // Reinitialize with new token
+        } catch (error) {
+            console.error('❌ Failed to store secure token:', error);
+            throw new Error(`Failed to store GitHub token: ${error}`);
+        }
+    }
+
+    async deleteSecureToken(): Promise<void> {
+        try {
+            await this.context.secrets.delete(this.TOKEN_SECRET_KEY);
+            console.log('✅ GitHub token deleted securely');
+            await this.initializeOctokit(); // Reinitialize without token
+        } catch (error) {
+            console.error('❌ Failed to delete secure token:', error);
+            throw new Error(`Failed to delete GitHub token: ${error}`);
+        }
+    }
+
+    // Method to refresh token if needed
+    public async refreshToken(): Promise<void> {
+        try {
+            console.log('🔄 Refreshing GitHub token...');
+            await this.initializeOctokit();
+        } catch (error) {
+            console.error('❌ Failed to refresh GitHub token:', error);
+            throw error;
+        }
     }
 
     async fetchRulesList(): Promise<GitHubRuleInfo[]> {
@@ -96,11 +141,15 @@ export class GitHubService {
                         console.warn(`⚠️ Directory ${rulesConfig.path}: GitHub API response is not an array`);
                     }
                 } catch (error: any) {
-                    // Log error but continue with other directories
+                    // Enhanced error handling with specific error types
                     if (error.status === 404) {
                         console.warn(`⚠️ Directory ${rulesConfig.path} not found in repository`);
+                    } else if (error.status === 403 && error.message?.includes('rate limit')) {
+                        console.error(`❌ GitHub API rate limit exceeded for directory ${rulesConfig.path}`);
+                        throw new Error('GitHub API rate limit exceeded. Please wait a few minutes before trying again.');
                     } else {
                         console.error(`❌ Error processing directory ${rulesConfig.path}:`, error);
+                        throw new Error(`Failed to process rules directory: ${error.message || error}`);
                     }
                 }
             }
@@ -126,9 +175,13 @@ export class GitHubService {
         } catch (error: any) {
             console.error('❌ Error fetching rules list:', error);
             
-            // Handle rate limit specifically
+            // Enhanced error handling with standardized patterns
             if (error.status === 403 && error.message?.includes('rate limit')) {
                 throw new Error('GitHub API rate limit exceeded. Please wait a few minutes before trying again. Consider using a GitHub token for higher rate limits.');
+            } else if (error.status === 401) {
+                throw new Error('GitHub authentication failed. Please check your token and try again.');
+            } else if (error.status === 404) {
+                throw new Error('GitHub repository not found. Please check the repository configuration.');
             }
             
             throw new Error(`Failed to fetch rules from GitHub: ${error.message || error}`);
@@ -162,9 +215,17 @@ export class GitHubService {
                 return content;
             }
             throw new Error('Rule content not found');
-        } catch (error) {
-            console.error(`Error fetching rule content for ${rulePath}:`, error);
-            throw new Error(`Failed to fetch rule content: ${error}`);
+        } catch (error: any) {
+            console.error(`❌ Error fetching rule content for ${rulePath}:`, error);
+            
+            // Enhanced error handling
+            if (error.status === 404) {
+                throw new Error(`Rule content not found: ${rulePath}`);
+            } else if (error.status === 403 && error.message?.includes('rate limit')) {
+                throw new Error('GitHub API rate limit exceeded while fetching rule content.');
+            }
+            
+            throw new Error(`Failed to fetch rule content: ${error.message || error}`);
         }
     }
 

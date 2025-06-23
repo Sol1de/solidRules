@@ -25,6 +25,11 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
                     case 'saveToken':
                         if (message.token && message.token.trim()) {
                             await this._saveToken(message.token.trim());
+                            
+                            // Update VSCode context to show that token is configured
+                            await vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
+                            console.log('🔒 Token configured: Yes');
+                            
                             vscode.window.showInformationMessage('Token GitHub configuré avec succès !');
                             // Refresh the interface
                             vscode.commands.executeCommand('solidrules.refreshRules');
@@ -53,11 +58,23 @@ export class TokenSetupViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _saveToken(token: string): Promise<void> {
-        const config = vscode.workspace.getConfiguration('solidrules');
-        await config.update('githubToken', token, vscode.ConfigurationTarget.Global);
-        
-        // Set context to show other panels
-        vscode.commands.executeCommand('setContext', 'solidrules.tokenConfigured', true);
+        try {
+            // Use SecretStorage API for secure token storage (consistent with GitHubService)
+            const TOKEN_SECRET_KEY = 'solidrules.github.token';
+            await this._context.secrets.store(TOKEN_SECRET_KEY, token);
+            console.log('✅ GitHub token stored securely via TokenSetupViewProvider');
+            
+            // Clear any old token from VSCode configuration (migration cleanup)
+            const config = vscode.workspace.getConfiguration('solidrules');
+            const oldToken = config.get<string>('githubToken');
+            if (oldToken) {
+                await config.update('githubToken', undefined, vscode.ConfigurationTarget.Global);
+                console.log('🧹 Cleaned up old token from VSCode configuration');
+            }
+        } catch (error) {
+            console.error('❌ Failed to store token in TokenSetupViewProvider:', error);
+            throw error;
+        }
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
