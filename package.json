@@ -29,7 +29,7 @@
         {
           "id": "solidrules.rulesExplorer",
           "name": "Rules Explorer",
-          "when": "solidrules.tokenConfigured"
+          "when": "solidrules.tokenConfigured && !solidrules.showSettings"
         },
         {
           "id": "solidrules.tokenSetup",

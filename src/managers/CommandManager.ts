@@ -58,9 +58,17 @@ export class CommandManager {
 
     private async refreshRules(): Promise<void> {
         try {
-            await this.rulesManager.refreshRules();
+            // Start refresh asynchronously without blocking UI
+            this.rulesManager.refreshRules().catch(error => {
+                console.error('Failed to refresh rules:', error);
+                vscode.window.showErrorMessage(`Failed to refresh rules: ${error}`);
+            });
+            
+            // Show immediate feedback without waiting
+            vscode.window.showInformationMessage('Refreshing rules in background...');
         } catch (error) {
-            console.error('Failed to refresh rules:', error);
+            console.error('Failed to start refresh:', error);
+            vscode.window.showErrorMessage(`Failed to start refresh: ${error}`);
         }
     }
 
@@ -680,16 +688,23 @@ export class CommandManager {
                 });
 
                 if (userInput === 'CLEAR') {
-                    await this.rulesManager.clearAllData();
-                    vscode.window.showInformationMessage('✅ Database cleared successfully');
+                    // Clear database asynchronously without blocking UI
+                    this.rulesManager.clearAllData().then(() => {
+                        vscode.window.showInformationMessage('✅ Database cleared successfully');
+                    }).catch(error => {
+                        console.error('❌ Failed to clear database:', error);
+                        vscode.window.showErrorMessage(`Failed to clear database: ${error}`);
+                    });
+                    
+                    // Show immediate feedback
+                    vscode.window.showInformationMessage('Clearing database...');
                 } else {
                     vscode.window.showInformationMessage('Database clear cancelled');
                 }
             }
         } catch (error) {
-            console.error('❌ Failed to clear database:', error);
-            vscode.window.showErrorMessage(`Failed to clear database: ${error}`);
-            throw error;
+            console.error('❌ Failed to start clear database:', error);
+            vscode.window.showErrorMessage(`Failed to start clear database: ${error}`);
         }
     }
 

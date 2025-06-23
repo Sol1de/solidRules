@@ -26,33 +26,32 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
             async (message) => {
                 console.log('Settings message received:', message);
                 switch (message.command) {
-                    case 'configureToken':
+                    case 'return':
+                        await vscode.commands.executeCommand('solidrules.closeSettings');
+                        break;
+
+                    case 'refreshRules':
+                        await vscode.commands.executeCommand('solidrules.refreshRules');
+                        break;
+
+                    case 'searchRules':
+                        await vscode.commands.executeCommand('solidrules.searchRules');
+                        break;
+
+                    case 'importCustomRule':
+                        await vscode.commands.executeCommand('solidrules.importCustomRule');
+                        break;
+
+                    case 'configureGitHubToken':
                         await vscode.commands.executeCommand('solidrules.configureGitHubToken');
                         break;
 
-                    case 'resetToken':
+                    case 'resetGitHubToken':
                         await vscode.commands.executeCommand('solidrules.resetGitHubToken');
                         break;
 
                     case 'clearDatabase':
                         await vscode.commands.executeCommand('solidrules.clearDatabase');
-                        break;
-
-                    case 'syncWorkspace':
-                        await vscode.commands.executeCommand('solidrules.syncWorkspace');
-                        break;
-
-                    case 'exportRules':
-                        await vscode.commands.executeCommand('solidrules.exportRules');
-                        break;
-
-                    case 'openExtensionSettings':
-                        await vscode.commands.executeCommand('workbench.action.openSettings', 'solidrules');
-                        break;
-
-                    case 'openGitHub':
-                        const githubUrl = 'https://github.com/settings/tokens/new?scopes=public_repo&description=SolidRules%20VSCode%20Extension';
-                        await vscode.env.openExternal(vscode.Uri.parse(githubUrl));
                         break;
                 }
             }
@@ -81,258 +80,273 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async _getHtmlForWebview(webview: vscode.Webview) {
+        private async _getHtmlForWebview(webview: vscode.Webview) {
         const tokenStatus = await this._getTokenStatus();
         return `<!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline';">
-    <title>SolidRules Settings</title>
+    <title>Settings</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: var(--vscode-font-family);
             font-size: var(--vscode-font-size);
             color: var(--vscode-foreground);
             background-color: var(--vscode-sideBar-background);
-            padding: 16px;
+            padding: 0;
             margin: 0;
-            line-height: 1.4;
+            height: 100vh;
+            overflow-y: auto;
         }
         
         .header {
-            text-align: center;
-            margin-bottom: 24px;
-            border-bottom: 1px solid var(--vscode-input-border);
-            padding-bottom: 16px;
+            position: sticky;
+            top: 0;
+            background-color: var(--vscode-sideBar-background);
+            border-bottom: 1px solid var(--vscode-panel-border);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 100;
+        }
+        
+        .return-btn {
+            background: none;
+            border: 1px solid var(--vscode-input-border);
+            color: var(--vscode-foreground);
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        
+        .return-btn:hover {
+            background-color: var(--vscode-list-hoverBackground);
+            border-color: var(--vscode-focusBorder);
         }
         
         .header h1 {
-            color: var(--vscode-foreground);
-            margin: 0 0 8px 0;
-            font-size: 18px;
-            font-weight: 600;
-        }
-        
-        .header p {
-            color: var(--vscode-descriptionForeground);
-            font-size: 12px;
             margin: 0;
-        }
-        
-        .section {
-            background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-        
-        .section h3 {
-            margin: 0 0 12px 0;
+            font-size: 16px;
+            font-weight: 600;
             color: var(--vscode-foreground);
+        }
+        
+        .content {
+            padding: 20px;
+            max-width: 600px;
+        }
+        
+        .setting-group {
+            margin-bottom: 32px;
+        }
+        
+        .setting-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .setting-title {
             font-size: 14px;
             font-weight: 600;
+            color: var(--vscode-foreground);
+            margin: 0 0 8px 0;
             display: flex;
             align-items: center;
             gap: 8px;
         }
         
-        .section h3 .icon {
-            font-size: 16px;
-        }
-        
-        .section-description {
+        .setting-description {
+            font-size: 12px;
             color: var(--vscode-descriptionForeground);
-            font-size: 11px;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
             line-height: 1.4;
         }
         
-        .action-button {
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 10px 16px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-family: var(--vscode-font-family);
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--vscode-input-border);
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
             font-size: 12px;
             font-weight: 500;
-            width: 100%;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: center;
+            width: auto;
+            margin-right: 8px;
             margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
         }
         
-        .action-button:hover {
-            background-color: var(--vscode-button-hoverBackground);
+        .btn:hover {
+            background: var(--vscode-button-secondaryHoverBackground);
+            border-color: var(--vscode-focusBorder);
         }
         
-        .action-button.secondary {
-            background-color: transparent;
-            color: var(--vscode-textLink-foreground);
-            border: 1px solid var(--vscode-input-border);
+        .btn.danger {
+            background: #da3633;
+            color: #ffffff;
+            border-color: #da3633;
         }
         
-        .action-button.secondary:hover {
-            background-color: var(--vscode-list-hoverBackground);
+        .btn.danger:hover {
+            background: #b92e2a;
+            border-color: #b92e2a;
         }
         
-        .action-button.danger {
-            background-color: var(--vscode-errorForeground);
-            color: var(--vscode-editor-background);
+        .btn.primary {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-color: var(--vscode-button-background);
         }
         
-        .action-button.danger:hover {
-            background-color: var(--vscode-errorForeground);
-            opacity: 0.9;
+        .btn.primary:hover {
+            background: var(--vscode-button-hoverBackground);
+            border-color: var(--vscode-button-hoverBackground);
         }
         
         .status-badge {
             display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
         }
         
-        .status-badge.active {
-            background-color: var(--vscode-charts-green);
-            color: var(--vscode-editor-background);
+        .status-badge.success {
+            background: #2ea043;
+            color: #ffffff;
         }
         
-        .status-badge.inactive {
-            background-color: var(--vscode-charts-orange);
-            color: var(--vscode-editor-background);
+        .status-badge.warning {
+            background: #fb8500;
+            color: #ffffff;
+        }
+        
+        .token-preview {
+            font-family: var(--vscode-editor-font-family);
+            font-size: 11px;
+            color: var(--vscode-textPreformat-foreground);
+            background: var(--vscode-textBlockQuote-background);
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            display: inline-block;
         }
         
         .divider {
-            border-top: 1px solid var(--vscode-input-border);
-            margin: 20px 0;
-        }
-        
-        .version-info {
-            text-align: center;
-            color: var(--vscode-descriptionForeground);
-            font-size: 10px;
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid var(--vscode-input-border);
+            height: 1px;
+            background: var(--vscode-panel-border);
+            margin: 16px 0;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>⚙️ SolidRules Settings</h1>
-        <p>Configuration et paramètres avancés</p>
+        <button class="return-btn" id="returnBtn">
+            <span>←</span>
+            Return
+        </button>
+        <h1>Settings</h1>
     </div>
 
-    <div class="section">
-                 <h3>
-             <span class="icon">🔑</span>
-             GitHub Token
-             <span class="status-badge ${tokenStatus.hasToken ? 'active' : 'inactive'}" id="tokenStatus">
-                 ${tokenStatus.hasToken ? 'Configuré' : 'Non configuré'}
-             </span>
-         </h3>
-                 <div class="section-description">
-             Gérez votre token GitHub pour des limites de taux plus élevées (5000 req/h au lieu de 60).
-             ${tokenStatus.hasToken && tokenStatus.tokenPreview ? `<br><small>Token actuel: <code>${tokenStatus.tokenPreview}</code></small>` : ''}
-         </div>
-        
-        <button class="action-button secondary" id="configureTokenBtn">
-            🔧 Configurer le Token
-        </button>
-        
-        <button class="action-button secondary" id="createTokenBtn">
-            🆕 Créer un Token GitHub
-        </button>
-        
-        <div class="divider"></div>
-        
-        <button class="action-button danger" id="resetTokenBtn">
-            🗑️ Réinitialiser le Token
-        </button>
-    </div>
-
-    <div class="section">
-        <h3>
-            <span class="icon">💾</span>
-            Base de Données
-        </h3>
-        <div class="section-description">
-            Gérez les données locales de SolidRules. Attention : ces actions sont irréversibles.
+    <div class="content">
+        <div class="setting-group">
+            <div class="setting-title">
+                Refresh Rules
+                <span class="status-badge">Quick Action</span>
+            </div>
+            <div class="setting-description">Update rules from GitHub repository</div>
+            <button class="btn primary" id="refreshRulesBtn">Refresh Rules</button>
         </div>
-        
-        <button class="action-button secondary" id="syncWorkspaceBtn">
-            🔄 Synchroniser le Workspace
-        </button>
-        
-        <button class="action-button secondary" id="exportRulesBtn">
-            📤 Exporter les Règles
-        </button>
-        
-        <div class="divider"></div>
-        
-        <button class="action-button danger" id="clearDatabaseBtn">
-            🗑️ Vider la Base de Données
-        </button>
-    </div>
 
-    <div class="section">
-        <h3>
-            <span class="icon">🛠️</span>
-            Extension VSCode
-        </h3>
-        <div class="section-description">
-            Paramètres de l'extension et configuration VSCode.
+        <div class="setting-group">
+            <div class="setting-title">
+                Search Rules
+                <span class="status-badge">Quick Action</span>
+            </div>
+            <div class="setting-description">Search through available rules</div>
+            <button class="btn primary" id="searchRulesBtn">Search Rules</button>
         </div>
-        
-        <button class="action-button secondary" id="extensionSettingsBtn">
-            ⚙️ Ouvrir les Paramètres
-        </button>
-    </div>
 
-    <div class="version-info">
-        SolidRules Extension v1.0.0<br>
-        Gestionnaire de règles CursorRules
+        <div class="setting-group">
+            <div class="setting-title">
+                Import Custom Rule
+                <span class="status-badge">Quick Action</span>
+            </div>
+            <div class="setting-description">Import your own custom rule</div>
+            <button class="btn primary" id="importCustomRuleBtn">Import Custom Rule</button>
+        </div>
+
+        <div class="setting-group">
+            <div class="setting-title">
+                GitHub Token
+                <span class="status-badge ${tokenStatus.hasToken ? 'success' : 'warning'}">
+                    ${tokenStatus.hasToken ? 'Configured' : 'Not configured'}
+                </span>
+            </div>
+            <div class="setting-description">
+                Configure GitHub token for higher rate limits (5000 req/h instead of 60)
+                ${tokenStatus.hasToken && tokenStatus.tokenPreview ? `<div class="token-preview">${tokenStatus.tokenPreview}</div>` : ''}
+            </div>
+            <button class="btn" id="configureGitHubTokenBtn">Configure GitHub Token</button>
+            <button class="btn danger" id="resetGitHubTokenBtn">Reset GitHub Token</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="setting-group">
+            <div class="setting-title">Clear Database</div>
+            <div class="setting-description">Remove all rules and data. This action cannot be undone.</div>
+            <button class="btn danger" id="clearDatabaseBtn">Clear Database</button>
+        </div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
         
-        // Action handlers
-        document.getElementById('configureTokenBtn').addEventListener('click', () => {
-            vscode.postMessage({ command: 'configureToken' });
+        document.getElementById('returnBtn').addEventListener('click', () => {
+            vscode.postMessage({ command: 'return' });
         });
         
-        document.getElementById('createTokenBtn').addEventListener('click', () => {
-            vscode.postMessage({ command: 'openGitHub' });
+        document.getElementById('refreshRulesBtn').addEventListener('click', () => {
+            vscode.postMessage({ command: 'refreshRules' });
         });
         
-        document.getElementById('resetTokenBtn').addEventListener('click', () => {
-            vscode.postMessage({ command: 'resetToken' });
+        document.getElementById('searchRulesBtn').addEventListener('click', () => {
+            vscode.postMessage({ command: 'searchRules' });
         });
         
-        document.getElementById('syncWorkspaceBtn').addEventListener('click', () => {
-            vscode.postMessage({ command: 'syncWorkspace' });
+        document.getElementById('importCustomRuleBtn').addEventListener('click', () => {
+            vscode.postMessage({ command: 'importCustomRule' });
         });
         
-        document.getElementById('exportRulesBtn').addEventListener('click', () => {
-            vscode.postMessage({ command: 'exportRules' });
+        document.getElementById('configureGitHubTokenBtn').addEventListener('click', () => {
+            vscode.postMessage({ command: 'configureGitHubToken' });
+        });
+        
+        document.getElementById('resetGitHubTokenBtn').addEventListener('click', () => {
+            vscode.postMessage({ command: 'resetGitHubToken' });
         });
         
         document.getElementById('clearDatabaseBtn').addEventListener('click', () => {
             vscode.postMessage({ command: 'clearDatabase' });
-        });
-        
-        document.getElementById('extensionSettingsBtn').addEventListener('click', () => {
-            vscode.postMessage({ command: 'openExtensionSettings' });
         });
     </script>
 </body>
