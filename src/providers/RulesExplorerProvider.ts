@@ -103,7 +103,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     description
                 );
                 newFolder.formatType = 'file';
-                newFolder.iconPath = new vscode.ThemeIcon('folder-opened', new vscode.ThemeColor('charts.blue'));
+                newFolder.iconPath = new vscode.ThemeIcon('folder-opened');
                 folders.push(newFolder);
             }
             
