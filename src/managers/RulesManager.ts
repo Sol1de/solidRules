@@ -570,6 +570,61 @@ export class RulesManager {
         return categories.sort();
     }
 
+    async getRulesByFormat(): Promise<{ directoryRules: CursorRule[], fileRules: CursorRule[] }> {
+        const allRules = await this.databaseManager.getAllRules();
+        
+        console.log(`🔍 DEBUG: getRulesByFormat - Total rules: ${allRules.length}`);
+        
+        // Log sample rules to understand their structure
+        if (allRules.length > 0) {
+            console.log('📋 Sample rules:');
+            allRules.slice(0, 5).forEach((rule, i) => {
+                console.log(`   ${i + 1}. ${rule.name} - githubPath: ${rule.githubPath} - isCustom: ${rule.isCustom}`);
+            });
+        }
+        
+        // Separate rules based on their GitHub path pattern
+        // Old format: rules/name/... (directory format)
+        // New format: rules-new/name.mdc (file format)
+        const directoryRules = allRules.filter(rule => 
+            !rule.isCustom && rule.githubPath && rule.githubPath.startsWith('rules/')
+        );
+        
+        const fileRules = allRules.filter(rule => 
+            !rule.isCustom && rule.githubPath && rule.githubPath.startsWith('rules-new/')
+        );
+
+        // Include custom rules with directory format by default
+        const customRules = allRules.filter(rule => rule.isCustom);
+        directoryRules.push(...customRules);
+        
+        console.log(`📊 Rules by format: ${directoryRules.length} directory rules, ${fileRules.length} file rules`);
+        
+        // Log some examples of each format
+        if (directoryRules.length > 0) {
+            console.log('📁 Directory rules examples:');
+            directoryRules.slice(0, 3).forEach(rule => {
+                console.log(`   - ${rule.name} (${rule.githubPath})`);
+            });
+        }
+        
+        if (fileRules.length > 0) {
+            console.log('📄 File rules examples:');
+            fileRules.slice(0, 3).forEach(rule => {
+                console.log(`   - ${rule.name} (${rule.githubPath})`);
+            });
+        } else {
+            console.log('⚠️ No file rules found! Checking for rules-new paths...');
+            const rulesNewRules = allRules.filter(rule => rule.githubPath && rule.githubPath.includes('rules-new'));
+            console.log(`🔍 Rules containing 'rules-new': ${rulesNewRules.length}`);
+            rulesNewRules.forEach(rule => {
+                console.log(`   - ${rule.name}: ${rule.githubPath}`);
+            });
+        }
+        
+        return { directoryRules, fileRules };
+    }
+
     async activateRule(ruleId: string, showNotification: boolean = true, skipWorkspaceUpdate: boolean = false): Promise<void> {
         try {
             const rule = await this.databaseManager.getRuleById(ruleId);

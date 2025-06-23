@@ -18,4 +18,5 @@ database.db
 *.db
 .vscode/settings.json
 !.vscode/launch.json
-!.vscode/tasks.json 
+!.vscode/tasks.json
+.cursor/rules
