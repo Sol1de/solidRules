@@ -36,96 +36,23 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
         }
 
         if (!element) {
-            // Root level - show format folders
-            return this.getFormatFolders();
-        }
-
-        // Child elements
-        if (element.contextValue === 'format-folder') {
-            // Show categories within each format folder
-            return this.getCategoriesForFormat(element.formatType!);
+            // Root level - show categories directly (merged from both formats)
+            return this.getMergedCategories();
         }
         
         if (element.contextValue === 'category') {
-            return this.getCategoryRules(element.category!, element.formatType);
+            return this.getMergedCategoryRules(element.category!);
         }
 
         return [];
     }
 
-    private async getFormatFolders(): Promise<RuleTreeItem[]> {
+    private async getMergedCategories(): Promise<RuleTreeItem[]> {
         try {
             const { directoryRules, fileRules } = await this.rulesManager.getRulesByFormat();
+            const allRules = [...directoryRules, ...fileRules];
             
-            const folders: RuleTreeItem[] = [];
-            
-            // Classic Rules folder (directory format)
-            if (directoryRules.length > 0) {
-                const activeCount = directoryRules.filter(r => r.isActive).length;
-                const favoriteCount = directoryRules.filter(r => r.isFavorite).length;
-                
-                let description = `${directoryRules.length} rules`;
-                if (activeCount > 0) {
-                    description += ` • ${activeCount} active`;
-                }
-                if (favoriteCount > 0) {
-                    description += ` • ${favoriteCount} favorites`;
-                }
-
-                const classicFolder = new RuleTreeItem(
-                    'Classic Rules',
-                    vscode.TreeItemCollapsibleState.Expanded,
-                    'format-folder',
-                    description
-                );
-                classicFolder.formatType = 'directory';
-                classicFolder.iconPath = new vscode.ThemeIcon('folder-opened');
-                folders.push(classicFolder);
-            }
-            
-            // New Rules folder (file format)
-            if (fileRules.length > 0) {
-                const activeCount = fileRules.filter(r => r.isActive).length;
-                const favoriteCount = fileRules.filter(r => r.isFavorite).length;
-                
-                let description = `${fileRules.length} rules`;
-                if (activeCount > 0) {
-                    description += ` • ${activeCount} active`;
-                }
-                if (favoriteCount > 0) {
-                    description += ` • ${favoriteCount} favorites`;
-                }
-
-                const newFolder = new RuleTreeItem(
-                    'New Rules',
-                    vscode.TreeItemCollapsibleState.Expanded,
-                    'format-folder',
-                    description
-                );
-                newFolder.formatType = 'file';
-                newFolder.iconPath = new vscode.ThemeIcon('folder-opened');
-                folders.push(newFolder);
-            }
-            
-            console.log(`📁 Format folders: ${folders.length} folders created`);
-            return folders;
-            
-        } catch (error) {
-            console.error('Failed to get format folders:', error);
-            return [new RuleTreeItem(
-                'Error loading rules',
-                vscode.TreeItemCollapsibleState.None,
-                'error'
-            )];
-        }
-    }
-
-    private async getCategoriesForFormat(formatType: 'directory' | 'file'): Promise<RuleTreeItem[]> {
-        try {
-            const { directoryRules, fileRules } = await this.rulesManager.getRulesByFormat();
-            const rules = formatType === 'directory' ? directoryRules : fileRules;
-            
-            if (rules.length === 0) {
+            if (allRules.length === 0) {
                 return [new RuleTreeItem(
                     'No rules found',
                     vscode.TreeItemCollapsibleState.None,
@@ -133,9 +60,9 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                 )];
             }
 
-            // Group by category
+            // Group by category (merge both formats)
             const categoryMap = new Map<string, CursorRule[]>();
-            rules.forEach(rule => {
+            allRules.forEach(rule => {
                 const category = rule.category || 'Other';
                 if (!categoryMap.has(category)) {
                     categoryMap.set(category, []);
@@ -167,44 +94,41 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     category
                 );
                 
-                treeItem.formatType = formatType;
                 treeItem.iconPath = new vscode.ThemeIcon('folder');
                 
-                console.log(`📁 Category ${category} (${formatType}): ${categoryRules.length} rules`);
+                console.log(`📁 Merged Category ${category}: ${categoryRules.length} rules`);
                 
                 return treeItem;
             });
 
         } catch (error) {
-            console.error(`Failed to get categories for format ${formatType}:`, error);
-            return [];
+            console.error('Failed to get merged categories:', error);
+            return [new RuleTreeItem(
+                'Error loading rules',
+                vscode.TreeItemCollapsibleState.None,
+                'error'
+            )];
         }
     }
 
-    private async getCategoryRules(category: string, formatType: 'directory' | 'file' | undefined): Promise<RuleTreeItem[]> {
+    private async getMergedCategoryRules(category: string): Promise<RuleTreeItem[]> {
         try {
-            console.log(`🔍 Getting rules for category: ${category}, format: ${formatType}`);
-            
-            if (!formatType) {
-                // Fallback to old behavior for backward compatibility
-                const allRules = await this.rulesManager.searchRules(this.searchQuery, this.currentFilters);
-                const categoryRules = allRules.filter(rule => (rule.category || 'Other') === category);
-                console.log(`📋 Found ${categoryRules.length} rules in category ${category} (legacy)`);
-                return this.createRuleTreeItems(categoryRules);
-            }
+            console.log(`🔍 Getting merged rules for category: ${category}`);
             
             const { directoryRules, fileRules } = await this.rulesManager.getRulesByFormat();
-            const rules = formatType === 'directory' ? directoryRules : fileRules;
-            const categoryRules = rules.filter(rule => (rule.category || 'Other') === category);
+            const allRules = [...directoryRules, ...fileRules];
+            const categoryRules = allRules.filter(rule => (rule.category || 'Other') === category);
             
-            console.log(`📋 Found ${categoryRules.length} rules in category ${category} (${formatType})`);
+            console.log(`📋 Found ${categoryRules.length} merged rules in category ${category}`);
             return this.createRuleTreeItems(categoryRules);
-
+            
         } catch (error) {
-            console.error(`Failed to get rules for category ${category}:`, error);
+            console.error(`Failed to get merged rules for category ${category}:`, error);
             return [];
         }
     }
+
+
 
     private createRuleTreeItems(rules: CursorRule[]): RuleTreeItem[] {
         return rules.map(rule => {
@@ -296,8 +220,6 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
 }
 
 export class RuleTreeItem extends BaseRuleTreeItem {
-    public formatType?: 'directory' | 'file'; // Track rule format type
-    
     protected getTooltipPrefix(): string {
         return '(Rule)';
     }
