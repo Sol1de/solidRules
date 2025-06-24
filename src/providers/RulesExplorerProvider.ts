@@ -30,34 +30,43 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
         });
     }
 
-    // Method to handle folder expansion/collapse
+    // Method to handle folder expansion/collapse - optimized for instant visual feedback
     onDidExpandElement(element: RuleTreeItem): void {
+        console.log('🔵 onDidExpandElement called for:', element.label, element.contextValue);
         if (element.contextValue === 'category' && element.category) {
+            console.log('📂 Expanding folder:', element.category);
             this.expandedFolders.add(element.category);
-            this.updateFolderIcon(element);
+            
+            // Direct icon update for immediate visual feedback
+            element.iconPath = new vscode.ThemeIcon('folder-opened', new vscode.ThemeColor('charts.blue'));
+            console.log('🎨 Set folder-opened icon for:', element.category);
+            
+            // Also trigger full refresh to ensure consistency
+            this.updateFolderIconInstant();
         }
     }
 
     onDidCollapseElement(element: RuleTreeItem): void {
+        console.log('🔴 onDidCollapseElement called for:', element.label, element.contextValue);
         if (element.contextValue === 'category' && element.category) {
+            console.log('📁 Collapsing folder:', element.category);
             this.expandedFolders.delete(element.category);
-            this.updateFolderIcon(element);
+            
+            // Direct icon update for immediate visual feedback
+            element.iconPath = new vscode.ThemeIcon('folder');
+            console.log('🎨 Set folder icon for:', element.category);
+            
+            // Also trigger full refresh to ensure consistency
+            this.updateFolderIconInstant();
         }
     }
 
-    private updateFolderIcon(element: RuleTreeItem): void {
-        if (element.contextValue === 'category' && element.category) {
-            const isExpanded = this.expandedFolders.has(element.category);
-            if (isExpanded) {
-                // Folder open - blue color
-                element.iconPath = new vscode.ThemeIcon('folder-opened', new vscode.ThemeColor('charts.blue'));
-            } else {
-                // Folder closed - default color
-                element.iconPath = new vscode.ThemeIcon('folder');
-            }
-            // Refresh the entire tree to update the icon
-            this.scheduleRefresh();
-        }
+    private updateFolderIconInstant(): void {
+        // Force immediate refresh with cache invalidation for folder state changes
+        // This ensures folder icons change instantly with expand/collapse
+        this.invalidateCache();
+        this._onDidChangeTreeData.fire();
+        console.log('🔄 Instant folder icon update triggered with cache invalidation');
     }
 
     // Debounced refresh to prevent excessive UI updates

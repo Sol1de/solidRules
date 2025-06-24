@@ -54,10 +54,18 @@ export async function activate(context: vscode.ExtensionContext) {
         });
         
         // Register expansion/collapse event listeners for dynamic folder icons
+        console.log('🔧 Registering tree view expansion/collapse event listeners...');
         context.subscriptions.push(
-            rulesExplorerTreeView.onDidExpandElement(e => rulesExplorerProvider.onDidExpandElement(e.element)),
-            rulesExplorerTreeView.onDidCollapseElement(e => rulesExplorerProvider.onDidCollapseElement(e.element))
+            rulesExplorerTreeView.onDidExpandElement(e => {
+                console.log('🌟 TreeView expansion event fired for:', e.element.label);
+                rulesExplorerProvider.onDidExpandElement(e.element);
+            }),
+            rulesExplorerTreeView.onDidCollapseElement(e => {
+                console.log('🌟 TreeView collapse event fired for:', e.element.label);
+                rulesExplorerProvider.onDidCollapseElement(e.element);
+            })
         );
+        console.log('✅ Tree view event listeners registered successfully');
         
         context.subscriptions.push(
             rulesExplorerTreeView,
