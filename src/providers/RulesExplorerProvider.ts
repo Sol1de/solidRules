@@ -19,6 +19,11 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     private readonly CACHE_TTL = 30000; // 30 seconds TTL for cache
     private readonly MAX_CACHE_SIZE = 100; // Limit cache size for memory efficiency
 
+    // High-performance category rules cache for instant folder opening
+    private categoryRulesCache: Map<string, RuleTreeItem[]> = new Map();
+    private categoryRulesCacheTimestamp: Map<string, number> = new Map();
+    private readonly CATEGORY_CACHE_TTL = 60000; // 1 minute cache for category rules
+
     // Debounced refresh for better performance
     private refreshTimeout: NodeJS.Timeout | undefined;
     private readonly REFRESH_DEBOUNCE = 50; // 50ms debounce
@@ -90,10 +95,13 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
         }
     }
 
-    // Cache management
+    // Cache management with category rules cache invalidation
     private invalidateCache(): void {
         this.categoriesCache.clear();
         this.cacheTimestamp = 0;
+        // Also clear category rules cache for data consistency
+        this.categoryRulesCache.clear();
+        this.categoryRulesCacheTimestamp.clear();
         // Note: We don't clear expandedFolders to preserve expansion state across refreshes
     }
 
@@ -264,7 +272,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
             // Cache the results (icons will be updated dynamically above)
             this.setCachedCategories(categoryItems);
             
-            console.log(`📁 Generated ${categoryItems.length} merged categories with ${filteredRules.length} rules`);
+            console.log(`📁 Generated ${categoryItems.length} categories with ${filteredRules.length} total rules`);
             
             return categoryItems;
 
@@ -281,6 +289,20 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
 
     private async getMergedCategoryRules(category: string): Promise<RuleTreeItem[]> {
         try {
+            // High-performance cache check for category rules - massive speed boost!
+            const cacheKey = `${category}|${this.generateCacheKey()}`;
+            const now = Date.now();
+            const cachedTimestamp = this.categoryRulesCacheTimestamp.get(cacheKey);
+            
+            if (cachedTimestamp && (now - cachedTimestamp) < this.CATEGORY_CACHE_TTL) {
+                const cached = this.categoryRulesCache.get(cacheKey);
+                if (cached) {
+                    console.log(`⚡ Using cached rules for category ${category} (${cached.length} rules)`);
+                    return cached;
+                }
+            }
+
+            const startTime = Date.now();
             console.log(`🔍 Getting merged rules for category: ${category}`);
             
             const { directoryRules, fileRules } = await this.rulesManager.getRulesByFormat();
@@ -289,9 +311,24 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
             
             // Apply search and filters
             const filteredRules = this.applyFiltersToRules(categoryRules);
+            const result = this.createRuleTreeItems(filteredRules);
             
-            console.log(`📋 Found ${filteredRules.length} merged rules in category ${category}`);
-            return this.createRuleTreeItems(filteredRules);
+            // Cache the result for instant subsequent access
+            this.categoryRulesCache.set(cacheKey, result);
+            this.categoryRulesCacheTimestamp.set(cacheKey, now);
+            
+            // LRU cache management for memory efficiency
+            if (this.categoryRulesCache.size > this.MAX_CACHE_SIZE) {
+                const oldestKey = this.categoryRulesCache.keys().next().value;
+                if (oldestKey) {
+                    this.categoryRulesCache.delete(oldestKey);
+                    this.categoryRulesCacheTimestamp.delete(oldestKey);
+                }
+            }
+            
+            const duration = Date.now() - startTime;
+            console.log(`🚀 Generated ${filteredRules.length} rules for category ${category} in ${duration}ms (cached)`);
+            return result;
             
         } catch (error) {
             console.error(`❌ Failed to get merged rules for category ${category}:`, error);

@@ -17,6 +17,11 @@ export class RulesManager {
     private readonly WORKSPACE_SYNC_DELAY = 2000; // 2 seconds debounce
     private readonly UI_REFRESH_DELAY = 100; // 100ms UI debounce
 
+    // High-performance cache for rules by format (major performance boost)
+    private rulesByFormatCache: { directoryRules: CursorRule[], fileRules: CursorRule[] } | null = null;
+    private rulesCacheTimestamp: number = 0;
+    private readonly RULES_CACHE_TTL = 60000; // 1 minute cache TTL for maximum performance
+
     constructor(
         private databaseManager: DatabaseManager,
         private githubService: GitHubService,
@@ -24,15 +29,23 @@ export class RulesManager {
         private workspaceManager: WorkspaceManager
     ) {}
 
-    // Optimized immediate UI refresh with debouncing
+    // Optimized immediate UI refresh with debouncing and cache invalidation
     private scheduleUIRefresh(): void {
         if (this.uiRefreshTimeout) {
             clearTimeout(this.uiRefreshTimeout);
         }
 
         this.uiRefreshTimeout = setTimeout(() => {
+            // Invalidate rules cache when rules change for data consistency
+            this.invalidateRulesCache();
             this._onDidChangeRules.fire();
         }, this.UI_REFRESH_DELAY);
+    }
+
+    // High-performance cache invalidation
+    private invalidateRulesCache(): void {
+        this.rulesByFormatCache = null;
+        this.rulesCacheTimestamp = 0;
     }
 
     // Enhanced workspace sync with intelligent batching
@@ -455,7 +468,7 @@ export class RulesManager {
             console.log(`📊 Rules processed in this refresh: ${processedRulesCount}`);
             await this.notificationManager.showRulesRefreshedNotification(processedRulesCount);
             
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error('Failed to refresh rules:', error);
             await this.notificationManager.showErrorMessage(
@@ -569,58 +582,38 @@ export class RulesManager {
     }
 
     async getRulesByFormat(): Promise<{ directoryRules: CursorRule[], fileRules: CursorRule[] }> {
+        // High-performance cache check - massive speed improvement!
+        const now = Date.now();
+        if (this.rulesByFormatCache && (now - this.rulesCacheTimestamp) < this.RULES_CACHE_TTL) {
+            console.log(`⚡ Using cached rules by format (${this.rulesByFormatCache.directoryRules.length + this.rulesByFormatCache.fileRules.length} total)`);
+            return this.rulesByFormatCache;
+        }
+
+        const startTime = Date.now();
         const allRules = await this.databaseManager.getAllRules();
         
-        console.log(`🔍 DEBUG: getRulesByFormat - Total rules: ${allRules.length}`);
+        // Optimized rule separation with single pass
+        const directoryRules: CursorRule[] = [];
+        const fileRules: CursorRule[] = [];
         
-        // Log sample rules to understand their structure
-        if (allRules.length > 0) {
-            console.log('📋 Sample rules:');
-            allRules.slice(0, 5).forEach((rule, i) => {
-                console.log(`   ${i + 1}. ${rule.name} - githubPath: ${rule.githubPath} - isCustom: ${rule.isCustom}`);
-            });
+        for (const rule of allRules) {
+            if (rule.isCustom || (rule.githubPath && rule.githubPath.startsWith('rules/'))) {
+                directoryRules.push(rule);
+            } else if (rule.githubPath && rule.githubPath.startsWith('rules-new/')) {
+                fileRules.push(rule);
+            }
         }
         
-        // Separate rules based on their GitHub path pattern
-        // Old format: rules/name/... (directory format)
-        // New format: rules-new/name.mdc (file format)
-        const directoryRules = allRules.filter(rule => 
-            !rule.isCustom && rule.githubPath && rule.githubPath.startsWith('rules/')
-        );
+        const result = { directoryRules, fileRules };
         
-        const fileRules = allRules.filter(rule => 
-            !rule.isCustom && rule.githubPath && rule.githubPath.startsWith('rules-new/')
-        );
-
-        // Include custom rules with directory format by default
-        const customRules = allRules.filter(rule => rule.isCustom);
-        directoryRules.push(...customRules);
+        // Cache the result for ultra-fast subsequent calls
+        this.rulesByFormatCache = result;
+        this.rulesCacheTimestamp = now;
         
-        console.log(`📊 Rules by format: ${directoryRules.length} directory rules, ${fileRules.length} file rules`);
+        const duration = Date.now() - startTime;
+        console.log(`🚀 Generated rules by format in ${duration}ms: ${directoryRules.length} directory, ${fileRules.length} file rules (cached for ${this.RULES_CACHE_TTL/1000}s)`);
         
-        // Log some examples of each format
-        if (directoryRules.length > 0) {
-            console.log('📁 Directory rules examples:');
-            directoryRules.slice(0, 3).forEach(rule => {
-                console.log(`   - ${rule.name} (${rule.githubPath})`);
-            });
-        }
-        
-        if (fileRules.length > 0) {
-            console.log('📄 File rules examples:');
-            fileRules.slice(0, 3).forEach(rule => {
-                console.log(`   - ${rule.name} (${rule.githubPath})`);
-            });
-        } else {
-            console.log('⚠️ No file rules found! Checking for rules-new paths...');
-            const rulesNewRules = allRules.filter(rule => rule.githubPath && rule.githubPath.includes('rules-new'));
-            console.log(`🔍 Rules containing 'rules-new': ${rulesNewRules.length}`);
-            rulesNewRules.forEach(rule => {
-                console.log(`   - ${rule.name}: ${rule.githubPath}`);
-            });
-        }
-        
-        return { directoryRules, fileRules };
+        return result;
     }
 
     async activateRule(ruleId: string, showNotification: boolean = true, skipWorkspaceUpdate: boolean = false): Promise<void> {
@@ -643,7 +636,7 @@ export class RulesManager {
             }
             
             // Immediate UI update without debouncing for better responsiveness
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error(`Failed to activate rule ${ruleId}:`, error);
             if (showNotification) {
@@ -680,7 +673,7 @@ export class RulesManager {
             }
             
             // Immediate UI update without debouncing for better responsiveness
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error(`Failed to deactivate rule ${ruleId}:`, error);
             if (showNotification) {
@@ -707,7 +700,7 @@ export class RulesManager {
                 await this.notificationManager.showRuleRemovedFromFavoritesNotification(rule.name);
             }
             
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error(`Failed to toggle favorite for rule ${ruleId}:`, error);
             await this.notificationManager.showErrorMessage(`Failed to update favorite: ${error}`);
@@ -734,7 +727,7 @@ export class RulesManager {
             await this.databaseManager.saveRule(customRule);
             await this.notificationManager.showCustomRuleImportedNotification(name);
             
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error('Failed to import custom rule:', error);
             await this.notificationManager.showErrorMessage(`Failed to import custom rule: ${error}`);
@@ -769,7 +762,7 @@ export class RulesManager {
                 await this.updateWorkspaceRules();
             }
             
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error(`Failed to delete rule ${ruleId}:`, error);
             await this.notificationManager.showErrorMessage(`Failed to delete rule: ${error}`);
@@ -845,7 +838,7 @@ export class RulesManager {
                 await this.updateWorkspaceRules();
             }
             
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error(`Failed to update rule ${ruleId}:`, error);
             await this.notificationManager.showErrorMessage(`Failed to update rule: ${error}`);
@@ -918,7 +911,7 @@ export class RulesManager {
             rule.isActive = true;
             
             // Immediate UI refresh only
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error(`Failed to fast activate rule ${ruleId}:`, error);
             throw error;
@@ -937,7 +930,7 @@ export class RulesManager {
             rule.isActive = false;
             
             // Immediate UI refresh only
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error(`Failed to fast deactivate rule ${ruleId}:`, error);
             throw error;
@@ -1092,7 +1085,7 @@ export class RulesManager {
     async clearAllData(): Promise<void> {
         try {
             await this.databaseManager.clearAllData();
-            this._onDidChangeRules.fire();
+            this.scheduleUIRefresh();
         } catch (error) {
             console.error('Failed to clear all data:', error);
             throw error;
