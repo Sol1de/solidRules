@@ -10,6 +10,9 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     private searchQuery: string = '';
     private currentFilters: SearchFilters = { sortBy: 'recent' };
     
+    // Track expanded folders for dynamic icons
+    private expandedFolders: Set<string> = new Set();
+    
     // Performance optimization: caching with TTL
     private categoriesCache: Map<string, RuleTreeItem[]> = new Map();
     private cacheTimestamp: number = 0;
@@ -25,6 +28,36 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
         this.rulesManager.onDidChangeRules(() => {
             this.scheduleRefresh();
         });
+    }
+
+    // Method to handle folder expansion/collapse
+    onDidExpandElement(element: RuleTreeItem): void {
+        if (element.contextValue === 'category' && element.category) {
+            this.expandedFolders.add(element.category);
+            this.updateFolderIcon(element);
+        }
+    }
+
+    onDidCollapseElement(element: RuleTreeItem): void {
+        if (element.contextValue === 'category' && element.category) {
+            this.expandedFolders.delete(element.category);
+            this.updateFolderIcon(element);
+        }
+    }
+
+    private updateFolderIcon(element: RuleTreeItem): void {
+        if (element.contextValue === 'category' && element.category) {
+            const isExpanded = this.expandedFolders.has(element.category);
+            if (isExpanded) {
+                // Folder open - blue color
+                element.iconPath = new vscode.ThemeIcon('folder-opened', new vscode.ThemeColor('charts.blue'));
+            } else {
+                // Folder closed - default color
+                element.iconPath = new vscode.ThemeIcon('folder');
+            }
+            // Refresh the entire tree to update the icon
+            this.scheduleRefresh();
+        }
     }
 
     // Debounced refresh to prevent excessive UI updates
@@ -53,6 +86,7 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
     private invalidateCache(): void {
         this.categoriesCache.clear();
         this.cacheTimestamp = 0;
+        // Note: We don't clear expandedFolders to preserve expansion state across refreshes
     }
 
     private isCacheValid(): boolean {
@@ -190,7 +224,13 @@ export class RulesExplorerProvider implements vscode.TreeDataProvider<RuleTreeIt
                     category
                 );
                 
-                treeItem.iconPath = new vscode.ThemeIcon('folder');
+                // Set initial folder icon based on expansion state
+                const isExpanded = this.expandedFolders.has(category);
+                if (isExpanded) {
+                    treeItem.iconPath = new vscode.ThemeIcon('folder-opened', new vscode.ThemeColor('charts.blue'));
+                } else {
+                    treeItem.iconPath = new vscode.ThemeIcon('folder');
+                }
                 
                 return treeItem;
             });

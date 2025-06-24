@@ -48,8 +48,19 @@ export async function activate(context: vscode.ExtensionContext) {
         const activeRuleDecorator = new ActiveRuleDecorator();
         
         // Register tree data providers with error handling
+        const rulesExplorerTreeView = vscode.window.createTreeView('solidrules.rulesExplorer', {
+            treeDataProvider: rulesExplorerProvider,
+            showCollapseAll: true
+        });
+        
+        // Register expansion/collapse event listeners for dynamic folder icons
         context.subscriptions.push(
-            vscode.window.registerTreeDataProvider('solidrules.rulesExplorer', rulesExplorerProvider),
+            rulesExplorerTreeView.onDidExpandElement(e => rulesExplorerProvider.onDidExpandElement(e.element)),
+            rulesExplorerTreeView.onDidCollapseElement(e => rulesExplorerProvider.onDidCollapseElement(e.element))
+        );
+        
+        context.subscriptions.push(
+            rulesExplorerTreeView,
             vscode.window.registerTreeDataProvider('solidrules.activeRules', activeRulesProvider),
             vscode.window.registerTreeDataProvider('solidrules.favorites', favoritesProvider)
         );
